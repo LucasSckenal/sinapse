@@ -3,6 +3,8 @@
 Trabalho Avaliativo 02 de Ciência da Computação (UNIJUÍ): um sistema para montar, configurar, treinar, salvar e usar redes neurais
 do tipo Multilayer Perceptron, sem precisar mexer no código para mudar a arquitetura.
 
+No ar em https://sinapse-mlp.vercel.app (publicar de novo: `publicar.cmd`).
+
 Ele roda no navegador e foi feito em TypeScript. Toda a rede (neurônio, camada, propagação, erro, retropropagação e SGD) foi
 escrita do zero. Nenhuma biblioteca de rede neural ou de diferenciação automática é usada: as dependências são só o Vite
 (servidor e build), o Vitest (testes) e as fontes.
