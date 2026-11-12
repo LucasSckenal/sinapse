@@ -4,7 +4,7 @@ import { checkCompatibility, codingsFor, parseCSV, selectColumns, selectionWidth
 import { accuracy, decode, type ColumnCoding } from '../src/core/encoding';
 import { initFor, initStd } from '../src/core/initialization';
 import { mse } from '../src/core/loss';
-import { Network, type Architecture } from '../src/core/network';
+import { Network, withBlocks, type Architecture } from '../src/core/network';
 import { fitNormalization } from '../src/core/normalization';
 import { fromJSON, toJSON } from '../src/core/persistence';
 import { predict, predictColumns } from '../src/core/predict';
@@ -277,5 +277,84 @@ describe('persistência e previsão', () => {
     const bad = JSON.parse(toJSON({ net: Network.create(arch, 1), normalization: null }));
     bad.camadas[1].pesos[0].pop();
     expect(() => fromJSON(JSON.stringify(bad))).toThrow(/esperava 5 pesos/);
+  });
+});
+
+describe('blocos em paralelo', () => {
+  const parallel: Architecture = {
+    inputs: 4,
+    layers: [
+      withBlocks([
+        { neurons: 3, activation: 'tanh', from: [0, 1] },
+        { neurons: 2, activation: 'relu', from: [2, 3] },
+      ]),
+      withBlocks([
+        { neurons: 2, activation: 'sigmoid', from: [0] },
+        { neurons: 2, activation: 'linear' },
+      ]),
+      { neurons: 2, activation: 'linear' },
+    ],
+  };
+
+  it('cada bloco só recebe das origens escolhidas', () => {
+    const net = Network.create(parallel, 3);
+    expect(net.layers[0].neurons[0].sources).toEqual([0, 1]);
+    expect(net.layers[0].neurons[0].weights).toHaveLength(2);
+    expect(net.layers[0].neurons[4].sources).toEqual([2, 3]);
+    // bloco 0 da camada 2 recebe só do bloco A (neurônios 0..2)
+    expect(net.layers[1].neurons[0].sources).toEqual([0, 1, 2]);
+    expect(net.layers[1].neurons[3].sources).toBeNull();
+    // mudar uma entrada que o bloco A não usa não muda a saída dele
+    net.forward([0.3, -0.4, 1, 1]);
+    const a = net.layers[0].outputs().slice(0, 3);
+    net.forward([0.3, -0.4, -5, 9]);
+    expect(net.layers[0].outputs().slice(0, 3)).toEqual(a);
+    expect(net.architecture).toEqual(parallel);
+  });
+
+  it('gradientes com blocos batem com o gradiente numérico', () => {
+    const net = Network.create(parallel, 5);
+    const x = [0.5, -1.2, 0.8, 0.3];
+    const t = [0.2, -0.6];
+    const loss = () => 0.5 * net.forward(x).reduce((s, o, k) => s + (o - t[k]) ** 2, 0);
+    net.forward(x);
+    net.backward(t);
+    const analytic = net.layers.map((l) => l.neurons.map((n) => n.weights.map((_, p) => n.delta * l.inputs[n.sourceOf(p)])));
+    const h = 1e-6;
+    net.layers.forEach((l, li) =>
+      l.neurons.forEach((n, ni) =>
+        n.weights.forEach((_, p) => {
+          const old = n.weights[p];
+          n.weights[p] = old + h;
+          const up = loss();
+          n.weights[p] = old - h;
+          const down = loss();
+          n.weights[p] = old;
+          expect(analytic[li][ni][p]).toBeCloseTo((up - down) / (2 * h), 5);
+        }),
+      ),
+    );
+  });
+
+  it('salva e abre com os blocos e dá as mesmas saídas', () => {
+    const model = { net: Network.create(parallel, 9), normalization: null };
+    const loaded = fromJSON(toJSON(model));
+    expect(loaded.net.architecture).toEqual(parallel);
+    expect(predict(loaded, [1, 2, 3, 4])).toEqual(predict(model, [1, 2, 3, 4]));
+    const bad = JSON.parse(toJSON(model));
+    bad.camadas[0].blocos[0].origem = [0, 7];
+    expect(() => fromJSON(JSON.stringify(bad))).toThrow(/não existe/);
+  });
+
+  it('recusa bloco sem origem e aprende XOR com dois blocos', () => {
+    expect(() => Network.create({ inputs: 2, layers: [withBlocks([{ neurons: 2, activation: 'tanh', from: [] }, { neurons: 1, activation: 'tanh' }]), { neurons: 1, activation: 'sigmoid' }] }, 1)).toThrow(/Marque ao menos uma/);
+    const net = Network.create(
+      { inputs: 2, layers: [withBlocks([{ neurons: 3, activation: 'tanh' }, { neurons: 3, activation: 'relu' }]), { neurons: 1, activation: 'sigmoid' }] },
+      4,
+    );
+    const X = [[0, 0], [0, 1], [1, 0], [1, 1]];
+    const Y = [[0], [1], [1], [0]];
+    new Trainer(net, { inputs: X, targets: Y }, { inputs: X, targets: Y }, { learningRate: 0.5, epochs: 3000, seed: 2 }).run();
+    expect(mse(net, X, Y)).toBeLessThan(0.02);
   });
 });
