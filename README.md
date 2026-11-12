@@ -38,6 +38,35 @@ A pasta `dist/` funciona em qualquer servidor estático (`npm run preview` serve
 
 Os números aceitam vírgula ou ponto como casa decimal.
 
+### Colunas com rótulos em texto
+
+Uma coluna toda em texto (por exemplo `especie` com `setosa`, `versicolor`, `virginica`) é lida como **rótulo de classe**:
+
+- vira uma posição por classe (one-hot): uma saída `especie` com 3 classes pede 3 neurônios na camada de saída, e a tela de
+  Arquitetura já ajusta isso sozinha;
+- também pode ser entrada, e aí ocupa uma entrada por classe;
+- na previsão, a tela mostra o nome da classe vencedora (a de maior valor) e a barra de cada classe; para digitar, a entrada de
+  texto vira uma escolha entre as classes;
+- quando a saída é de classificação, o treino mostra a **taxa de acerto** na validação a cada época e no teste no fim.
+
+Coluna que mistura números e texto é tratada como erro de digitação e acusada com a linha. Célula vazia também é erro.
+O máximo é de 50 classes por coluna.
+
+### Visualizações (dados reais, nada decorativo)
+
+- **Rede 3D** (Treino): um nó por neurônio, cada ligação com a cor e o brilho do peso atual (branco = positivo, cinza =
+  negativo). Durante o treino, um exemplo de treino passa pela rede: os pulsos andam camada por camada e o brilho de cada nó
+  é a ativação daquele neurônio.
+- **Superfície do erro** (Treino): o MSE do treino quando só dois pesos variam (os dois que mais mudaram desde o começo) e os
+  outros ficam como estão agora, com o caminho que esses dois pesos fizeram durante o treino. É calculada no worker.
+- **Fronteira** (Treino): com 2 entradas numéricas, a classe que a rede escolhe em cada ponto do plano, com os exemplos reais
+  por cima; um anel vermelho marca os que ela ainda erra. Com 1 entrada, a curva da rede sobre os pontos.
+- **Previsão acendendo** (Prever): ao prever, a rede 3D acende camada por camada com as ativações daquela entrada.
+
+**Câmera:** arrastar gira; botão direito, Shift + arrastar ou dois dedos movem; roda ou pinça aproximam; duplo clique volta à
+vista inicial. Também há botões +, − e ⟲ na cena, e com o foco nela as setas giram, + e − aproximam e 0 centraliza. Sem
+WebGL, a rede aparece no desenho 2D com os mesmos pesos.
+
 ### Datasets de exemplo
 
 Ficam em `public/exemplos/` e são **sintéticos**, gerados por fórmula em `scripts/gerar-exemplos.mjs` (`npm run exemplos`):
@@ -47,6 +76,7 @@ Ficam em `public/exemplos/` e são **sintéticos**, gerados por fórmula em `scr
 | `xor.csv` | a, b → xor | o problema clássico que precisa de camada oculta |
 | `seno.csv` | ângulo em graus (0 a 360) → seno | regressão; a entrada em escala grande mostra o efeito da normalização |
 | `circulo.csv` | x, y → dentro, fora | classificação com duas saídas (ponto dentro do círculo de raio 0,6) |
+| `espiral.csv` | x, y → braco (`norte`, `leste`, `oeste`) | classificação com **rótulo em texto**, três braços de uma espiral |
 
 ## Onde está cada requisito
 
@@ -127,14 +157,15 @@ tela não travar.
 | `camadas[].pesos[i][j]` | peso do neurônio *i* para a entrada *j* da camada |
 | `camadas[].vieses[i]` | viés do neurônio *i* |
 | `normalizacao` | `null`, `{ "tipo": "minmax", "min": [...], "max": [...] }` ou `{ "tipo": "zscore", "media": [...], "desvio": [...] }`, um valor por entrada, calculados no treino |
-| `colunas` | opcional: nomes das colunas, só para a tela rotular os campos |
+| `colunas` | opcional: nomes das posições, só para a tela rotular os campos |
+| `codificacao` | opcional: como cada coluna do CSV virou números, `{ "entradas": [...], "saidas": [...] }`, cada item `{ "nome", "tipo": "numero" }` ou `{ "nome", "tipo": "classe", "classes": [...] }`; uma coluna de classe ocupa uma posição por classe, na ordem da lista |
 
 Ao abrir, o arquivo é conferido inteiro: formato, número de pesos por neurônio, números válidos e normalização com o tamanho
 certo. A rede reconstruída dá exatamente as mesmas saídas da original. Há um teste que confere isso.
 
 ## Testes
 
-`npm test` roda 19 testes em `tests/core.test.ts`:
+`npm test` roda 22 testes em `tests/core.test.ts`:
 
 - as derivadas das quatro ativações batem com a derivada numérica;
 - Xavier e He são escolhidos pela ativação, com o desvio esperado, e a mesma semente dá os mesmos pesos;
@@ -146,7 +177,9 @@ certo. A rede reconstruída dá exatamente as mesmas saídas da original. Há um
 - o CSV é lido e os erros de leitura aparecem;
 - a divisão é reproduzível e a normalização usa só o treino (as saídas não são normalizadas);
 - uma rede salva e aberta dá as mesmas saídas, a previsão confere a quantidade de valores e um arquivo quebrado é recusado
-  com uma mensagem clara.
+  com uma mensagem clara;
+- coluna de texto vira classes (one-hot) e conta uma saída por classe; a classe vencedora e a taxa de acerto saem certas; a
+  rede com rótulos salva e abre com as classes.
 
 ## Estrutura
 

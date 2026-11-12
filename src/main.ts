@@ -4,7 +4,8 @@ import { download, h, icon, logo, pickFile, toast } from './ui/dom';
 import { arquiteturaScreen } from './ui/screens/arquitetura';
 import { dadosScreen } from './ui/screens/dados';
 import { preverScreen } from './ui/screens/prever';
-import { leaveTreino, treinoScreen } from './ui/screens/treino';
+import { disposeTreino, leaveTreino, treinoScreen } from './ui/screens/treino';
+import { disposePredictNet } from './ui/net3d-mount';
 import { onChange, resetTraining, set, state, type ScreenName } from './ui/state';
 
 const SCREENS: { id: ScreenName; label: string; render: () => HTMLElement; done: () => boolean }[] = [
@@ -83,7 +84,8 @@ function render(): void {
   const active = document.activeElement as HTMLElement | null;
   lastFocus = active?.getAttribute('aria-label') ?? null;
   renderSide();
-  if (lastScreen === 'treino') leaveTreino();
+  if (lastScreen === 'treino') (state.screen === 'treino' ? leaveTreino : disposeTreino)();
+  if (lastScreen === 'prever' && state.screen !== 'prever') disposePredictNet();
   const screen = SCREENS.find((s) => s.id === state.screen)!;
   const el = screen.render();
   if (lastScreen === state.screen) el.style.animation = 'none';

@@ -10,7 +10,7 @@ const out = new URL('../docs/prints/', import.meta.url);
 mkdirSync(out, { recursive: true });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: true });
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 
 async function run(name, viewport) {
   const page = await browser.newPage();

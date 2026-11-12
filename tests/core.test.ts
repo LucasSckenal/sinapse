@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVATIONS, ACTIVATION_NAMES } from '../src/core/activations';
-import { checkCompatibility, parseCSV, selectColumns, splitDataset } from '../src/core/dataset';
+import { checkCompatibility, codingsFor, parseCSV, selectColumns, selectionWidths, splitDataset } from '../src/core/dataset';
+import { accuracy, decode, type ColumnCoding } from '../src/core/encoding';
 import { initFor, initStd } from '../src/core/initialization';
 import { mse } from '../src/core/loss';
 import { Network, type Architecture } from '../src/core/network';
 import { fitNormalization } from '../src/core/normalization';
 import { fromJSON, toJSON } from '../src/core/persistence';
-import { predict } from '../src/core/predict';
+import { predict, predictColumns } from '../src/core/predict';
 import { Random } from '../src/core/random';
 import { Trainer } from '../src/core/trainer';
 
@@ -181,11 +182,49 @@ describe('datasets', () => {
   it('acusa linha com texto ou colunas a mais', () => {
     expect(() => parseCSV('a,b\n1,2\n3,x\n')).toThrow(/"x" não é um número/);
     expect(() => parseCSV('a,b\n1,2\n3,4,5\n')).toThrow(/3 colunas/);
+    expect(() => parseCSV('a,b\n1,2\n3,\n')).toThrow(/vazia/);
+  });
+
+  it('coluna de texto vira classes (one-hot) e conta uma saída por classe', () => {
+    const t = parseCSV('x;y;especie\n1;2;setosa\n3;4;virginica\n5;6;setosa\n7;8;versicolor\n');
+    expect(t.classes[2]).toEqual(['setosa', 'versicolor', 'virginica']);
+    expect(t.rows[1][2]).toBe(2);
+    const s = selectColumns(t, { inputs: [0, 1], outputs: [2] });
+    expect(s.targets[0]).toEqual([1, 0, 0]);
+    expect(s.targets[3]).toEqual([0, 1, 0]);
+    expect(selectionWidths(t, { inputs: [0, 1], outputs: [2] })).toEqual({ inputs: 2, outputs: 3 });
+    expect(checkCompatibility({ inputs: 2, layers: [{ neurons: 1, activation: 'sigmoid' }] }, t, { inputs: [0, 1], outputs: [2] })[0]).toMatch(/pede 3/);
+    // texto também pode ser entrada
+    expect(selectColumns(t, { inputs: [2], outputs: [0] }).inputs[3]).toEqual([0, 1, 0]);
+  });
+
+  it('decodifica a classe vencedora e mede a taxa de acerto', () => {
+    const codings: ColumnCoding[] = [{ nome: 'especie', tipo: 'classe', classes: ['a', 'b', 'c'] }];
+    const d = decode(codings, [0.1, 0.7, 0.2])[0];
+    expect(d.tipo === 'classe' && d.classe).toBe('b');
+    expect(accuracy([[0.1, 0.7, 0.2], [0.9, 0.05, 0.05]], [[0, 1, 0], [0, 0, 1]], codings)).toBe(0.5);
+    expect(accuracy([[0.8], [0.3]], [[1], [1]], undefined)).toBe(0.5);
+    expect(accuracy([[0.8]], [[0.37]], undefined)).toBeUndefined();
+  });
+
+  it('rede com rótulos salva e abre com as classes e prevê pelo nome', () => {
+    const t = parseCSV('x;especie\n0;a\n1;b\n');
+    const codings = { entradas: codingsFor(t, [0]), saidas: codingsFor(t, [1]) };
+    const model = { net: Network.create({ inputs: 1, layers: [{ neurons: 2, activation: 'sigmoid' }] }, 1), normalization: null, codings };
+    const loaded = fromJSON(toJSON(model));
+    expect(loaded.codings).toEqual(codings);
+    const r = predictColumns(loaded, [1]);
+    expect(r.decoded[0].tipo).toBe('classe');
+    expect(predictColumns(model, [1]).raw).toEqual(r.raw);
+    const bad = JSON.parse(toJSON(model));
+    bad.codificacao.saidas[0].classes.push('c');
+    expect(() => fromJSON(JSON.stringify(bad))).toThrow(/soma 3 posições/);
   });
 
   it('confere a compatibilidade com a arquitetura', () => {
-    expect(checkCompatibility({ inputs: 2, layers: [{ neurons: 1, activation: 'sigmoid' }] }, { inputs: [0, 1], outputs: [2] })).toEqual([]);
-    expect(checkCompatibility({ inputs: 3, layers: [{ neurons: 2, activation: 'sigmoid' }] }, { inputs: [0, 1], outputs: [2] })).toHaveLength(2);
+    const t = parseCSV(csv);
+    expect(checkCompatibility({ inputs: 2, layers: [{ neurons: 1, activation: 'sigmoid' }] }, t, { inputs: [0, 1], outputs: [2] })).toEqual([]);
+    expect(checkCompatibility({ inputs: 3, layers: [{ neurons: 2, activation: 'sigmoid' }] }, t, { inputs: [0, 1], outputs: [2] })).toHaveLength(2);
   });
 
   it('divide com semente, soma 100% e normaliza só com o treino', () => {

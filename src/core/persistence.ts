@@ -1,4 +1,5 @@
 import { getActivation, type ActivationName } from './activations';
+import { validateCodings, type ColumnCoding } from './encoding';
 import { Layer } from './layer';
 import { Network } from './network';
 import { Neuron } from './neuron';
@@ -27,12 +28,15 @@ export interface SavedModel {
   normalizacao: Normalization | null;
   /** Nomes das colunas, só para a interface rotular os campos. */
   colunas?: { entradas: string[]; saidas: string[] };
+  /** Como cada coluna do CSV virou números: "numero" passa direto, "classe" vira uma posição por classe. */
+  codificacao?: { entradas: ColumnCoding[]; saidas: ColumnCoding[] };
 }
 
 export interface Model {
   net: Network;
   normalization: Normalization | null;
   columns?: { entradas: string[]; saidas: string[] };
+  codings?: { entradas: ColumnCoding[]; saidas: ColumnCoding[] };
 }
 
 export function serialize(model: Model): SavedModel {
@@ -49,6 +53,7 @@ export function serialize(model: Model): SavedModel {
     })),
     normalizacao: model.normalization,
     ...(model.columns ? { colunas: model.columns } : {}),
+    ...(model.codings ? { codificacao: model.codings } : {}),
   };
 }
 
@@ -89,7 +94,13 @@ export function deserialize(data: unknown): Model {
     d.colunas.saidas.length === net.outputCount
       ? d.colunas
       : undefined;
-  return { net, normalization: validateNormalization(d.normalizacao, net.inputCount), columns };
+  const codings = d.codificacao
+    ? {
+        entradas: validateCodings(d.codificacao.entradas, net.inputCount, 'entradas'),
+        saidas: validateCodings(d.codificacao.saidas, net.outputCount, 'saídas'),
+      }
+    : undefined;
+  return { net, normalization: validateNormalization(d.normalizacao, net.inputCount), columns, codings };
 }
 
 export function fromJSON(text: string): Model {

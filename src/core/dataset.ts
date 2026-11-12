@@ -1,3 +1,4 @@
+import { encode, expandedNames, totalWidth, type ColumnCoding } from './encoding';
 import type { Architecture } from './network';
 import { fitNormalization, normalizeRows, type Normalization, type NormalizationName } from './normalization';
 import { Random } from './random';
@@ -8,8 +9,13 @@ import { Random } from './random';
  */
 export interface Table {
   headers: string[];
+  /** Número da célula; nas colunas de texto, o índice da classe em `classes[coluna]`. */
   rows: number[][];
+  /** null = coluna numérica; lista = coluna de rótulos (classes em ordem). */
+  classes: (string[] | null)[];
 }
+
+const MAX_CLASSES = 50;
 
 function splitLine(line: string, sep: string): string[] {
   const out: string[] = [];
@@ -42,28 +48,53 @@ function toNumber(cell: string): number {
   return Number(cell);
 }
 
-/** Lê um CSV numérico. Se a primeira linha não for numérica, vira o cabeçalho. */
+/**
+ * Lê um CSV. Se a primeira linha não for numérica, vira o cabeçalho. Coluna toda em texto vira
+ * coluna de rótulos (classes); coluna que mistura números e texto é acusada com a linha.
+ */
 export function parseCSV(text: string): Table {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim() !== '');
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim() !== '');
   if (lines.length === 0) throw new Error('O arquivo está vazio.');
   const sep = detectSeparator(lines[0]);
   const first = splitLine(lines[0], sep);
-  const hasHeader = first.some((c) => Number.isNaN(toNumber(c)));
+  const body0 = lines.slice(1).map((l) => splitLine(l, sep));
+  // cabeçalho: a primeira linha tem texto onde as outras linhas, em sua maioria, têm número
+  const numericShare = (col: number) => body0.filter((r) => Number.isFinite(toNumber(r[col] ?? ''))).length / Math.max(1, body0.length);
+  const hasHeader = body0.length === 0 ? first.some((c) => Number.isNaN(toNumber(c))) : first.some((c, j) => Number.isNaN(toNumber(c)) && (numericShare(j) > 0.5 || body0.every((r) => r[j] !== c)));
   const headers = hasHeader ? first.map((h, i) => h || `coluna ${i + 1}`) : first.map((_, i) => `coluna ${i + 1}`);
-  const body = hasHeader ? lines.slice(1) : lines;
-  if (body.length === 0) throw new Error('O arquivo só tem o cabeçalho, sem nenhuma linha de dados.');
-  const rows = body.map((line, i) => {
-    const cells = splitLine(line, sep);
+  const cellsRows = hasHeader ? body0 : [first, ...body0];
+  if (cellsRows.length === 0) throw new Error('O arquivo só tem o cabeçalho, sem nenhuma linha de dados.');
+  const lineNo = (i: number) => i + (hasHeader ? 2 : 1);
+  cellsRows.forEach((cells, i) => {
     if (cells.length !== headers.length)
-      throw new Error(`Linha ${i + (hasHeader ? 2 : 1)}: tem ${cells.length} colunas, o esperado era ${headers.length}.`);
-    return cells.map((c, j) => {
-      const v = toNumber(c);
-      if (!Number.isFinite(v))
-        throw new Error(`Linha ${i + (hasHeader ? 2 : 1)}, coluna "${headers[j]}": "${c}" não é um número.`);
-      return v;
+      throw new Error(`Linha ${lineNo(i)}: tem ${cells.length} colunas, o esperado era ${headers.length}.`);
+    cells.forEach((c, j) => {
+      if (c === '') throw new Error(`Linha ${lineNo(i)}, coluna "${headers[j]}": célula vazia.`);
     });
   });
-  return { headers, rows };
+  const classes: (string[] | null)[] = headers.map((_, j) => {
+    const texts = cellsRows.map((r, i) => [r[j], i] as const).filter(([c]) => !Number.isFinite(toNumber(c)));
+    if (texts.length === 0) return null;
+    if (texts.length < cellsRows.length) {
+      // coluna misturada: número e texto juntos é erro de digitação, não rótulo
+      const [c, i] = texts[0];
+      throw new Error(`Linha ${lineNo(i)}, coluna "${headers[j]}": "${c}" não é um número (a coluna mistura números e texto).`);
+    }
+    const list = [...new Set(cellsRows.map((r) => r[j]))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    if (list.length > MAX_CLASSES)
+      throw new Error(`A coluna "${headers[j]}" tem ${list.length} textos diferentes; o máximo de classes é ${MAX_CLASSES}.`);
+    return list;
+  });
+  const rows = cellsRows.map((cells) => cells.map((c, j) => (classes[j] ? classes[j]!.indexOf(c) : toNumber(c))));
+  return { headers, rows, classes };
+}
+
+/** Como cada coluna escolhida vira números para a rede. */
+export function codingsFor(table: Table, cols: readonly number[]): ColumnCoding[] {
+  return cols.map((c) => {
+    const k = table.classes[c];
+    return k ? { nome: table.headers[c], tipo: 'classe', classes: k } : { nome: table.headers[c], tipo: 'numero' };
+  });
 }
 
 export interface ColumnSelection {
@@ -81,20 +112,29 @@ export function selectColumns(table: Table, sel: ColumnSelection): Samples {
   if (sel.outputs.length === 0) throw new Error('Escolha ao menos uma coluna de saída.');
   if (sel.inputs.some((c) => sel.outputs.includes(c)))
     throw new Error('Uma coluna não pode ser entrada e saída ao mesmo tempo.');
+  const ci = codingsFor(table, sel.inputs);
+  const co = codingsFor(table, sel.outputs);
   return {
-    inputs: table.rows.map((r) => sel.inputs.map((c) => r[c])),
-    targets: table.rows.map((r) => sel.outputs.map((c) => r[c])),
+    inputs: table.rows.map((r) => encode(ci, sel.inputs.map((c) => r[c]))),
+    targets: table.rows.map((r) => encode(co, sel.outputs.map((c) => r[c]))),
   };
 }
 
 /** Verifica se os dados combinam com a arquitetura. Devolve a lista de problemas (vazia = ok). */
-export function checkCompatibility(arch: Pick<Architecture, 'inputs' | 'layers'>, sel: ColumnSelection): string[] {
+/** Quantas posições as colunas escolhidas ocupam (coluna de rótulos = uma por classe). */
+export function selectionWidths(table: Table, sel: ColumnSelection): { inputs: number; outputs: number } {
+  return { inputs: totalWidth(codingsFor(table, sel.inputs)), outputs: totalWidth(codingsFor(table, sel.outputs)) };
+}
+
+export function checkCompatibility(arch: Pick<Architecture, 'inputs' | 'layers'>, table: Table, sel: ColumnSelection): string[] {
   const problems: string[] = [];
   const outs = arch.layers[arch.layers.length - 1]?.neurons ?? 0;
-  if (arch.inputs !== sel.inputs.length)
-    problems.push(`A rede tem ${arch.inputs} entradas e o dataset tem ${sel.inputs.length} colunas de entrada.`);
-  if (outs !== sel.outputs.length)
-    problems.push(`A rede tem ${outs} saídas e o dataset tem ${sel.outputs.length} colunas de saída.`);
+  const w = selectionWidths(table, sel);
+  const extra = (cols: number[]) => (cols.some((c) => table.classes[c]) ? ' (cada coluna de rótulos conta uma por classe)' : '');
+  if (arch.inputs !== w.inputs)
+    problems.push(`A rede tem ${arch.inputs} entradas e o dataset pede ${w.inputs}${extra(sel.inputs)}.`);
+  if (outs !== w.outputs)
+    problems.push(`A rede tem ${outs} saídas e o dataset pede ${w.outputs}${extra(sel.outputs)}.`);
   return problems;
 }
 
@@ -151,4 +191,14 @@ export function splitDataset(
   const normalizacao = fitNormalization(normalization, treino.inputs);
   for (const s of [treino, validacao, teste]) s.inputs = normalizeRows(normalizacao, s.inputs);
   return { treino, validacao, teste, normalizacao };
+}
+
+/** Nomes e codificação das colunas escolhidas, guardados junto com a rede. */
+export function modelMeta(table: Table, sel: ColumnSelection) {
+  const entradas = codingsFor(table, sel.inputs);
+  const saidas = codingsFor(table, sel.outputs);
+  return {
+    columns: { entradas: expandedNames(entradas), saidas: expandedNames(saidas) },
+    codings: { entradas, saidas },
+  };
 }

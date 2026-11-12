@@ -32,6 +32,7 @@ export interface State {
   status: TrainStatus;
   history: EpochResult[];
   testMSE: number | undefined;
+  testAccuracy: number | undefined;
   splitCounts: [number, number, number] | null;
   trainError: string;
 }
@@ -57,6 +58,7 @@ export const state: State = {
   status: 'parado',
   history: [],
   testMSE: undefined,
+  testAccuracy: undefined,
   splitCounts: null,
   trainError: '',
 };
@@ -78,7 +80,7 @@ export function set(patch: Partial<State>): void {
 /** Limpa o histórico do treino. Com um treino rodando não mexe em nada: a mudança vale no próximo. */
 export function resetTraining(): Partial<State> {
   if (state.status === 'rodando' || state.status === 'pausado') return {};
-  return { status: 'parado', history: [], testMSE: undefined, splitCounts: null, trainError: '' };
+  return { status: 'parado', history: [], testMSE: undefined, testAccuracy: undefined, splitCounts: null, trainError: '' };
 }
 
 export function architectureText(arch: Architecture): string {

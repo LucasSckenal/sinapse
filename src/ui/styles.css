@@ -211,7 +211,8 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .col-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 10px 12px; border-radius: 12px; transition: background var(--fast); }
 .col-row:hover { background: var(--s2); }
 .col-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-range { font-size: 12px; color: var(--t3); }
+.col-range { font-size: 12px; color: var(--t3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { display: inline-block; font-family: var(--font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t1); border: 1px solid var(--line2); border-radius: 999px; padding: 1px 7px; margin-right: 8px; vertical-align: 1px; }
 
 .split-bar { display: flex; height: 8px; border-radius: 8px; overflow: hidden; gap: 3px; }
 .split-bar span { transition: flex-grow var(--mid) var(--ease); border-radius: 4px; min-width: 0; }
@@ -222,6 +223,8 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .split-fields .field > span { display: flex; align-items: center; gap: 8px; }
 .split-fields .sw { width: 8px; height: 8px; border-radius: 3px; }
 .counts { font-size: 12px; color: var(--t3); }
+.stat-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+.acc { font-size: 13px; color: var(--t1); }
 
 /* ---------- arquitetura ---------- */
 .layers { display: grid; gap: 8px; }
@@ -239,7 +242,7 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 
 /* ---------- rede e gráfico ---------- */
 .netview { width: 100%; height: 100%; min-height: 340px; display: block; }
-.netview line { transition: stroke-opacity 0.4s var(--ease), stroke-width 0.4s var(--ease); }
+.netview line { transition: stroke-opacity 0.4s var(--ease), stroke-width 0.4s var(--ease); } /* lucas-ignore: anima-layout (traço do SVG reserva, não é layout) */
 .chart { width: 100%; height: 240px; display: block; overflow: visible; }
 .legend { display: flex; gap: 18px; font-size: 12px; color: var(--t2); }
 .legend i { display: inline-block; width: 14px; vertical-align: middle; margin-right: 6px; border-top: 2px solid var(--t1); }
@@ -267,6 +270,45 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .flash { animation: flash 0.5s var(--ease); }
 @keyframes flash { from { opacity: 0.2; transform: translateY(4px); } }
 
+/* ---------- 3D, fronteira ---------- */
+.train-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.train-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; position: relative; z-index: 1; }
+.stage-card { position: sticky; top: 24px; height: clamp(460px, calc(100dvh - 260px), 720px); padding: 20px; overflow: hidden; }
+.stage-host { position: relative; flex: 1; min-height: 0; margin: -8px -20px -20px; }
+.stage-host.loading3d::after { content: ''; position: absolute; inset: 0; margin: auto; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line2); border-top-color: var(--t1); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.stage3d { position: absolute; inset: 0; cursor: grab; animation: fadeIn 0.6s var(--ease); touch-action: none; }
+.stage3d.grabbing { cursor: grabbing; }
+.stage3d canvas { display: block; width: 100%; height: 100%; outline: none; }
+.stage3d canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--t1); }
+.cam-bar { position: absolute; right: 16px; bottom: 12px; z-index: 2; display: flex; gap: 6px; }
+.cam-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line2); background: var(--bar-bg); color: var(--t2); font-size: 15px; line-height: 1; cursor: pointer; backdrop-filter: blur(8px); transition: color var(--fast), border-color var(--fast), transform var(--fast) var(--ease); }
+.cam-btn:hover { color: var(--t1); border-color: var(--t3); }
+.cam-btn:active { transform: scale(0.9); }
+.pred-net .cam-bar { bottom: 10px; right: 10px; }
+@keyframes fadeIn { from { opacity: 0; } }
+.stage-host .netview { position: absolute; inset: 0; height: 100%; }
+.stage-msg { position: absolute; left: 20px; top: 12px; z-index: 1; font-size: 12px; color: var(--t3); max-width: 70%; }
+.legend3d { position: absolute; left: 20px; right: 140px; bottom: 16px; z-index: 1; display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--t3); pointer-events: none; }
+.legend3d i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+.lg-pos { background: var(--t1); }
+.lg-neg { background: #6e6e78; }
+.boundary-card { gap: 14px; }
+canvas.boundary { width: 100%; aspect-ratio: 1; border-radius: 14px; display: block; background: var(--s2); }
+.pred-net { position: relative; height: 260px; margin: -24px -24px 0; border-bottom: 1px solid var(--line); }
+.out-class { border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.out-class:last-child { border-bottom: 0; }
+.class-name { font-family: var(--font) !important; font-variation-settings: 'wdth' 125; font-weight: 300 !important; text-transform: uppercase; letter-spacing: 0.04em; }
+.class-bars { display: grid; gap: 8px; padding: 0 4px; }
+.class-bar { display: grid; grid-template-columns: minmax(60px, 0.6fr) 1fr 64px; gap: 12px; align-items: center; font-size: 12px; color: var(--t3); transition: color var(--mid); }
+.class-bar.win { color: var(--t1); }
+.class-bar .cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.class-bar .cv { text-align: right; }
+.class-bar .track { height: 4px; background: var(--line2); border-radius: 4px; overflow: hidden; }
+.class-bar .track i { display: block; height: 100%; width: 100%; background: var(--t3); transform-origin: left; transition: transform 0.6s var(--ease); }
+.class-bar.win .track i { background: var(--t1); }
+
 /* ---------- celular ---------- */
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
@@ -283,6 +325,9 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
   .model-chip { display: none; }
   main { padding: 28px 16px 40px; }
   .grid2 { grid-template-columns: 1fr; }
+  .train-grid { grid-template-columns: 1fr; }
+  .stage-card { position: relative; top: 0; height: 440px; }
+  .hint-drag { display: none; }
   .netview { min-height: 0; height: auto; }
   .layer-row { grid-template-columns: 1fr auto; }
   .layer-row .acts { grid-column: 1 / -1; flex-wrap: wrap; }

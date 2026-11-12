@@ -36,4 +36,18 @@ save(
   }),
 );
 
+// Espiral: ponto (x, y) → braço da espiral, com rótulo em texto (três classes).
+const arms = ['norte', 'leste', 'oeste'];
+save(
+  'espiral.csv',
+  ['x', 'y', 'braco'],
+  arms.flatMap((name, k) =>
+    Array.from({ length: 110 }, (_, i) => {
+      const r = i / 110;
+      const t = k * ((2 * Math.PI) / 3) + r * 4.2 + (rand() - 0.5) * 0.35;
+      return [f(r * Math.sin(t)), f(r * Math.cos(t)), name];
+    }),
+  ),
+);
+
 console.log('exemplos gerados em public/exemplos');

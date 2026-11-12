@@ -1,5 +1,5 @@
 import { ACTIVATION_NAMES, ACTIVATIONS, type ActivationName } from '../../core/activations';
-import { checkCompatibility } from '../../core/dataset';
+import { checkCompatibility, modelMeta, selectionWidths } from '../../core/dataset';
 import { initFor } from '../../core/initialization';
 import { Network, type Architecture } from '../../core/network';
 import { h, icon, notice, parseNum, segmented, stepper, toast } from '../dom';
@@ -16,13 +16,15 @@ export function syncArchWithData(): void {
   const { inputs, outputs } = state.selection;
   if (!state.table || !inputs.length || !outputs.length) return;
   const layers = state.arch.layers.slice();
-  // sugere a ativação de saída pela faixa dos valores esperados
-  const vals = state.table.rows.flatMap((r) => outputs.map((c) => r[c]));
-  const lo = Math.min(...vals);
-  const hi = Math.max(...vals);
+  const t = state.table;
+  // sugere a ativação de saída pela faixa dos valores esperados (rótulos viram 0/1: sigmoid)
+  const vals = t.rows.flatMap((r) => outputs.filter((c) => !t.classes[c]).map((c) => r[c]));
+  const lo = vals.length ? Math.min(...vals) : 0;
+  const hi = vals.length ? Math.max(...vals) : 1;
   const activation: ActivationName = lo >= 0 && hi <= 1 ? 'sigmoid' : lo >= -1 && hi <= 1 ? 'tanh' : 'linear';
-  layers[layers.length - 1] = { neurons: outputs.length, activation };
-  set({ arch: { inputs: inputs.length, layers } });
+  const w = selectionWidths(t, state.selection);
+  layers[layers.length - 1] = { neurons: w.outputs, activation };
+  set({ arch: { inputs: w.inputs, layers } });
 }
 
 function setArch(arch: Architecture): void {
@@ -73,15 +75,10 @@ function createNetwork(): void {
   try {
     const net = Network.create(state.arch, state.initSeed);
     const t = state.table;
-    const columns = t
-      ? {
-          entradas: state.selection.inputs.map((c) => t.headers[c]),
-          saidas: state.selection.outputs.map((c) => t.headers[c]),
-        }
-      : undefined;
-    const compatible = columns && columns.entradas.length === net.inputCount && columns.saidas.length === net.outputCount;
+    const compatible = t && checkCompatibility(net.architecture, t, state.selection).length === 0;
+    const meta = compatible ? modelMeta(t, state.selection) : {};
     set({
-      model: { net, normalization: null, columns: compatible ? columns : undefined },
+      model: { net, normalization: null, ...meta },
       modelName: state.fileName ? state.fileName.replace(/\.\w+$/, '') : 'rede',
       modelTrained: false,
       ...resetTraining(),
@@ -97,7 +94,7 @@ export function arquiteturaScreen(): HTMLElement {
   const arch = state.arch;
   const hidden = arch.layers.length - 1;
   const busy = state.status === 'rodando' || state.status === 'pausado';
-  const problems = state.table ? checkCompatibility(arch, state.selection) : [];
+  const problems = state.table ? checkCompatibility(arch, state.table, state.selection) : [];
   const total = arch.layers.reduce((acc, l, i) => acc + l.neurons * ((i === 0 ? arch.inputs : arch.layers[i - 1].neurons) + 1), 0);
 
   const addHidden = () => {
@@ -137,7 +134,7 @@ export function arquiteturaScreen(): HTMLElement {
             { class: 'layer-row' },
             h('div', { class: 'name wide' }, 'Entradas'),
             stepper(arch.inputs, 1, MAX_NEURONS, (v) => setArch({ ...arch, inputs: v }), 'entradas'),
-            h('div', { class: 'acts' }, h('span', { class: 'muted', style: 'font-size:12px' }, state.table ? `${state.selection.inputs.length} ${state.selection.inputs.length === 1 ? 'coluna' : 'colunas'} no dataset` : '')),
+            h('div', { class: 'acts' }, h('span', { class: 'muted', style: 'font-size:12px' }, state.table ? `o dataset pede ${selectionWidths(state.table, state.selection).inputs}` : '')),
             h('span'),
           ),
           arch.layers.map((_, i) => layerRow(i)),

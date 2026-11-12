@@ -20,6 +20,8 @@ export interface EpochResult {
   epoch: number;
   trainMSE: number;
   valMSE: number;
+  /** Taxa de acerto na validação, quando a saída é de classificação (calculada fora do núcleo). */
+  valAccuracy?: number;
 }
 
 export function validateTrainOptions(o: TrainOptions): void {

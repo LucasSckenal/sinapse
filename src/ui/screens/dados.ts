@@ -8,14 +8,15 @@ const EXAMPLES = [
   { file: 'xor.csv', label: 'XOR' },
   { file: 'seno.csv', label: 'Seno' },
   { file: 'circulo.csv', label: 'Círculo' },
+  { file: 'espiral.csv', label: 'Espiral' },
 ];
 
 type Role = 'entrada' | 'saida' | 'nada';
 
 export function loadTable(table: Table, fileName: string): void {
   const n = table.headers.length;
-  // sugestão: colunas 0/1 no fim (ex.: one-hot de classes) viram saída; senão, só a última
-  const binary = (c: number) => table.rows.every((r) => r[c] === 0 || r[c] === 1);
+  // sugestão: coluna de rótulos no fim vira saída; colunas 0/1 no fim (one-hot) também; senão, só a última
+  const binary = (c: number) => !table.classes[c] && table.rows.every((r) => r[c] === 0 || r[c] === 1);
   let first = n - 1;
   while (first > 0 && binary(first - 1) && binary(n - 1)) first--;
   if (first === 0 || (first < n - 1 && binary(first - 1))) first = n - 1;
@@ -116,10 +117,14 @@ function columnsCard(table: Table): HTMLElement {
         const col = table.rows.map((r) => r[i]);
         const min = Math.min(...col);
         const max = Math.max(...col);
+        const k = table.classes[i];
+        const desc = k
+          ? `${k.length} ${k.length === 1 ? 'classe' : 'classes'}: ${k.slice(0, 4).join(', ')}${k.length > 4 ? '…' : ''}`
+          : `${fmt(min, 2)} a ${fmt(max, 2)}`;
         return h(
           'div',
           { class: 'col-row' },
-          h('div', { style: 'min-width:0' }, h('div', { class: 'col-name', title: name }, name), h('div', { class: 'col-range mono' }, `${fmt(min, 2)} a ${fmt(max, 2)}`)),
+          h('div', { style: 'min-width:0' }, h('div', { class: 'col-name', title: name }, name), h('div', { class: 'col-range mono', title: k ? k.join(', ') : undefined }, k ? h('span', { class: 'tag' }, 'rótulo') : null, desc)),
           segmented<Role>(
             [
               { value: 'entrada', label: 'Entrada' },
