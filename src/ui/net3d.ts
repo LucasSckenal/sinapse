@@ -33,8 +33,10 @@ abstract class Stage {
   protected scene = new THREE.Scene();
   protected camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
   protected root = new THREE.Group();
-  protected yaw = 0.62;
-  protected pitch = 0.34;
+  protected yaw = 0.42;
+  protected pitch = 0.16;
+  /** Balanço automático: oscila em volta da vista inicial, devagar. */
+  protected sway = 0.2;
   protected dist = 14;
   protected target = new THREE.Vector3();
   /** Meia largura e meia altura do que precisa caber na tela; a câmera se afasta para caber. */
@@ -61,25 +63,33 @@ abstract class Stage {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.el.appendChild(this.renderer.domElement);
     this.scene.add(this.root);
-    this.scene.fog = new THREE.Fog(BG, 18, 40);
+    this.scene.fog = new THREE.Fog(BG, 22, 48);
+    this.scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(-4, 6, 8);
+    this.scene.add(key);
 
     this.setupControls();
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(this.el);
     this.io = new IntersectionObserver(([en]) => {
+      // enquanto ainda não está na página, não conta como "fora da tela"
+      if (!en.isIntersecting && !this.el.isConnected) return;
       this.visible = en.isIntersecting;
       if (this.visible) this.loop();
     });
     this.io.observe(this.el);
     document.addEventListener('visibilitychange', this.onVis);
+    // dá a partida sozinha (o observador só pausa quando a cena sai da tela)
+    requestAnimationFrame(() => this.loop());
   }
 
   /**
    * Câmera livre: arrastar gira; botão direito, Shift ou dois dedos movem; roda ou pinça
    * aproximam; duplo clique volta ao início. Teclado: setas giram, + e − aproximam, 0 centraliza.
    */
-  private home = { yaw: 0, pitch: 0, target: new THREE.Vector3() };
+  protected home = { yaw: 0, pitch: 0, target: new THREE.Vector3() };
   private pointers = new Map<number, { x: number; y: number }>();
   private mode: 'girar' | 'mover' = 'girar';
 
@@ -242,7 +252,7 @@ abstract class Stage {
       this.last = now;
       this.time += dt;
       // balanço leve só enquanto ninguém mexeu na câmera
-      if (!this.dragging && !this.touched() && now - this.idleSince > 2500) this.yaw += dt * 0.06;
+      if (!this.dragging && !this.touched() && this.sway > 0) this.yaw = this.home.yaw + Math.sin(this.time * 0.22) * this.sway;
       this.tick(dt);
       this.render();
       this.loop();
@@ -349,12 +359,13 @@ export class Net3D extends Stage {
       const multi = blocks.length > 1;
       const dims = blocks.map((b) => {
         const n = Math.min(b.count, MAX_SHOWN);
-        const side = n > (multi ? 4 : 6) ? Math.ceil(Math.sqrt(n)) : 1;
+        const perCol = multi ? 6 : 10;
+        const side = Math.ceil(n / perCol);
         const rows = Math.ceil(n / side);
-        const sp = side > 1 ? 0.85 : Math.min(1.1, (multi ? 3 : 5) / Math.max(1, n - 1));
+        const sp = Math.min(0.78, (multi ? 4.2 : 7) / Math.max(1, rows - 1));
         return { n, side, rows, sp, height: (rows - 1) * sp };
       });
-      const BLOCK_GAP = 1.3;
+      const BLOCK_GAP = 1.1;
       const totalH = dims.reduce((a, d) => a + d.height, 0) + (blocks.length - 1) * BLOCK_GAP;
       let y0 = totalH / 2;
       blocks.forEach((b, k) => {
@@ -362,7 +373,7 @@ export class Net3D extends Stage {
         for (let u = 0; u < d.n; u++) {
           const c = u % d.side;
           const r = Math.floor(u / d.side);
-          out[b.start + u] = new THREE.Vector3((l - (cols - 1) / 2) * gapX, y0 - r * d.sp, (c - (d.side - 1) / 2) * d.sp);
+          out[b.start + u] = new THREE.Vector3((l - (cols - 1) / 2) * gapX, y0 - r * d.sp, (c - (d.side - 1) / 2) * 0.9);
         }
         y0 -= d.height + BLOCK_GAP;
       });
@@ -402,27 +413,31 @@ export class Net3D extends Stage {
     this.root.add(this.lines);
 
     // neurônios
-    this.nodes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 28, 18), new THREE.MeshBasicMaterial(), count);
+    this.nodes = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.17, 32, 20),
+      new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.1 }),
+      count,
+    );
     this.root.add(this.nodes);
     // halos somados à luz (preto = invisível): crescem com a ativação
     this.halos = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(0.46, 20, 12),
-      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.SphereGeometry(0.34, 20, 12),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
       count,
     );
     this.root.add(this.halos);
 
     // pulsos
     this.pulseMesh = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(0.075, 12, 8),
+      new THREE.SphereGeometry(0.06, 12, 8),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
       600,
     );
     this.pulseMesh.count = 0;
     this.root.add(this.pulseMesh);
     this.pulseGlow = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(0.22, 12, 8),
-      new THREE.MeshBasicMaterial({ color: 0x3a3a40, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.SphereGeometry(0.15, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0x232327, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
       600,
     );
     this.pulseGlow.count = 0;
@@ -440,9 +455,10 @@ export class Net3D extends Stage {
     const all = this.nodePos.flat();
     const tall = Math.max(...all.map((p) => Math.abs(p.y)), 1);
     const deep = Math.max(...all.map((p) => Math.abs(p.z)), 0);
-    this.fitBox = { w: Math.max(span / 2, deep) + 1, h: tall + 0.8 };
+    this.fitBox = { w: Math.max(span / 2, deep) + 0.8, h: tall + 0.9 };
     this.fit();
     this.updateNodes();
+    this.buildLabels(topo, cols, gapX);
   }
 
   /** Pesos novos: cor e brilho de cada ligação. */
@@ -453,7 +469,7 @@ export class Net3D extends Stage {
       const w = model.camadas[e.layer]?.pesos[e.i]?.[e.p] ?? 0;
       const a = Math.pow(Math.abs(w) / maxPer[e.layer], 1.4);
       this.tmpColor.copy(w >= 0 ? POS : NEG);
-      this.tmpColor.lerpColors(BG, this.tmpColor, 0.1 + a * 0.85);
+      this.tmpColor.lerpColors(BG, this.tmpColor, 0.025 + Math.pow(a, 1.6) * 0.9);
       this.lineColors.set([this.tmpColor.r, this.tmpColor.g, this.tmpColor.b, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b], k * 6);
     });
     (this.lines.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
@@ -474,8 +490,8 @@ export class Net3D extends Stage {
     const hop = strong ? 0.42 : 0.3;
     const maxPer = this.model.camadas.map((c) => Math.max(1e-9, ...c.pesos.flat().map(Math.abs)));
     // escolhe as ligações mais fortes de cada camada (peso × ativação de quem envia)
-    const budget = strong ? 520 : 160;
-    const perLayer = Math.max(6, Math.floor(budget / Math.max(1, this.shown.length - 1)));
+    const budget = strong ? 260 : 80;
+    const perLayer = Math.max(4, Math.floor(budget / Math.max(1, this.shown.length - 1)));
     for (let l = 0; l < this.shown.length - 1; l++) {
       const cands = this.edges
         .filter((e) => e.layer === l)
@@ -503,8 +519,8 @@ export class Net3D extends Stage {
     const L = this.shown.length - 1; // camadas com pesos
     const forwardTime = L * hop + 0.35;
     const maxD = c.deltas.map((d) => Math.max(1e-12, ...d.map(Math.abs)));
-    const budget = strong ? 360 : 140;
-    const perLayer = Math.max(6, Math.floor(budget / Math.max(1, L)));
+    const budget = strong ? 200 : 70;
+    const perLayer = Math.max(4, Math.floor(budget / Math.max(1, L)));
     for (let l = L - 1; l >= 0; l--) {
       const step = L - 1 - l; // a última camada volta primeiro
       const w = this.model.camadas[l];
@@ -522,7 +538,53 @@ export class Net3D extends Stage {
     this.flashAt = this.time + forwardTime + L * hop + 0.2;
   }
 
+  /** Rótulos de cada camada (e letra de cada bloco), presos à cena e reprojetados a cada quadro. */
+  private labels: { el: HTMLElement; at: THREE.Vector3 }[] = [];
+  private buildLabels(topo: ReturnType<typeof topology>, cols: number, gapX: number): void {
+    const box = document.createElement('div');
+    box.className = 'labels3d';
+    this.el.appendChild(box);
+    const NAMES: Record<string, string> = { entrada: 'Entrada', linear: 'Linear', sigmoid: 'Sigmoid', tanh: 'Tanh', relu: 'ReLU' };
+    topo.blocks.forEach((blocks, l) => {
+      const ys = this.nodePos[l].filter(Boolean).map((p) => p.y);
+      const x = (l - (cols - 1) / 2) * gapX;
+      const name = document.createElement('span');
+      name.className = 'l3d-layer';
+      const acts = [...new Set(blocks.map((b) => NAMES[b.activation] ?? b.activation))].join(' · ');
+      const total = blocks.reduce((s, b) => s + b.count, 0);
+      name.textContent = `${l === 0 ? 'Entrada' : l === cols - 1 ? 'Saída' : `Oculta ${l}`} · ${total}`;
+      const sub = document.createElement('small');
+      sub.textContent = l === 0 ? '' : acts;
+      name.appendChild(sub);
+      box.appendChild(name);
+      this.labels.push({ el: name, at: new THREE.Vector3(x, Math.min(...ys) - 0.75, 0) });
+      if (blocks.length > 1)
+        blocks.forEach((b, k) => {
+          const first = this.nodePos[l][b.start];
+          if (!first) return;
+          const tag = document.createElement('span');
+          tag.className = 'l3d-block';
+          tag.textContent = 'ABCDEFGHIJKLMNOP'[k];
+          box.appendChild(tag);
+          this.labels.push({ el: tag, at: new THREE.Vector3(x, first.y + 0.5, 0) });
+        });
+    });
+  }
+
+  private placeLabels(): void {
+    const w = this.el.clientWidth;
+    const h = this.el.clientHeight;
+    const v = new THREE.Vector3();
+    for (const { el, at } of this.labels) {
+      v.copy(at).applyMatrix4(this.root.matrixWorld).project(this.camera);
+      const hidden = v.z > 1 || v.x < -1.2 || v.x > 1.2 || v.y < -1.2 || v.y > 1.2;
+      el.style.visibility = hidden ? 'hidden' : 'visible';
+      el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -50%)`;
+    }
+  }
+
   protected tick(dt: number): void {
+    this.placeLabels();
     // pisca as ligações quando o erro termina de voltar (pesos atualizados)
     if (this.flashAt >= 0 && this.time >= this.flashAt) {
       this.flash = 1;
@@ -585,16 +647,16 @@ export class Net3D extends Stage {
       col.forEach((p, k) => {
         const g = this.glow[l][k];
         this.dummy.position.copy(p);
-        this.dummy.scale.setScalar(0.8 + g * 0.55);
+        this.dummy.scale.setScalar(0.85 + g * 0.35);
         this.dummy.updateMatrix();
         const idx = this.nodeIndex[l][k];
         this.nodes.setMatrixAt(idx, this.dummy.matrix);
-        this.tmpColor.setScalar(0.3 + g * 0.7);
+        this.tmpColor.setScalar(0.05 + g * 0.75);
         this.nodes.setColorAt(idx, this.tmpColor);
-        this.dummy.scale.setScalar(0.5 + g * 0.9);
+        this.dummy.scale.setScalar(0.6 + g * 0.6);
         this.dummy.updateMatrix();
         this.halos.setMatrixAt(idx, this.dummy.matrix);
-        this.tmpColor.setScalar(g * g * 0.22);
+        this.tmpColor.setScalar(g * g * g * 0.09);
         this.halos.setColorAt(idx, this.tmpColor);
       }),
     );

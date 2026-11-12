@@ -46,7 +46,7 @@ async function run(name, viewport) {
   await shot('1-dados');
   await click('Arquitetura');
   await wait(200);
-  await page.evaluate(() => document.querySelectorAll('.layer-row')[1].querySelectorAll('.seg button')[3].click());
+  await page.evaluate(() => document.querySelectorAll('.block-row')[0].querySelectorAll('.seg button')[3].click());
   for (let i = 0; i < 8; i++) await page.click('[aria-label="Aumentar neurônios da camada oculta 1"]');
   await page.click('.add-layer');
   await shot('2-arquitetura');
