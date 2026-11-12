@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sinapse — mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0b0c; --s1:#121214; --s2:#18181b; --line:#232327; --line2:#2e2e33;
+  --t1:#f2f2f3; --t2:#a1a1a8; --t3:#6b6b73; --ac:#ffffff;
+  --r1:10px; --r2:16px; --r3:22px;
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--t1);font:14px/1.5 "Archivo",system-ui;font-variation-settings:"wdth" 100;min-height:100dvh;display:grid;grid-template-columns:232px 1fr;-webkit-font-smoothing:antialiased}
+.wide{font-variation-settings:"wdth" 125;font-weight:300;text-transform:uppercase;letter-spacing:.04em}
+.mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+aside{border-right:1px solid var(--line);padding:28px 16px;display:flex;flex-direction:column;gap:4px}
+.brand{font-size:15px;padding:0 12px 28px}
+.step{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:var(--r1);color:var(--t2);cursor:pointer;transition:background .2s var(--ease),color .2s}
+.step:hover{background:var(--s1);color:var(--t1)}
+.step.on{background:var(--s2);color:var(--t1)}
+.dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--t3)}
+.step.done .dot{background:var(--t2);border-color:var(--t2)}
+.step.on .dot{background:var(--ac);border-color:var(--ac);box-shadow:0 0 0 4px #ffffff14}
+.side-foot{margin-top:auto;display:flex;gap:8px;padding:0 4px}
+.ghost{flex:1;border:1px solid var(--line2);background:none;color:var(--t2);border-radius:var(--r1);padding:9px;font:inherit;font-size:12px;cursor:pointer;transition:all .2s}
+.ghost:hover{color:var(--t1);border-color:var(--t3)}
+main{padding:40px 56px;display:grid;grid-template-rows:auto 1fr auto;gap:32px;min-width:0}
+header{display:flex;align-items:end;justify-content:space-between;gap:24px}
+h1{font-size:44px;line-height:1}
+.sub{color:var(--t3);margin-top:10px;font-size:13px}
+.primary{background:var(--ac);color:#000;border:0;border-radius:999px;padding:13px 26px;font:500 13px "Archivo";font-variation-settings:"wdth" 115;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:transform .15s var(--ease),opacity .2s}
+.primary:hover{opacity:.9}.primary:active{transform:scale(.96)}
+.stage{display:grid;grid-template-columns:1.25fr 1fr;gap:20px;min-height:0}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r3);padding:24px;display:flex;flex-direction:column;min-height:0}
+.lbl{font-size:11px;color:var(--t3);letter-spacing:.12em}
+svg{width:100%;height:100%;display:block}
+.net{flex:1;min-height:360px}
+.chart{flex:1;min-height:220px}
+.legend{display:flex;gap:18px;font-size:12px;color:var(--t2);margin-top:10px}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:var(--r2);overflow:hidden;margin-top:20px}
+.stats div{background:var(--s1);padding:14px 16px}
+.stats b{display:block;font-size:20px;font-weight:400;margin-top:4px}
+footer{display:flex;gap:28px;align-items:center;border-top:1px solid var(--line);padding-top:20px;color:var(--t2);font-size:13px}
+.field{display:flex;align-items:center;gap:10px}
+.field input{width:84px;background:var(--s2);border:1px solid var(--line2);border-radius:8px;color:var(--t1);padding:7px 10px;font:13px "JetBrains Mono"}
+.bar{flex:1;height:3px;background:var(--line2);border-radius:3px;overflow:hidden}
+.bar span{display:block;height:100%;width:62%;background:var(--t1)}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.n-live{animation:pulse 1.6s var(--ease) infinite}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand wide">Sinapse</div>
+  <div class="step done"><span class="dot"></span>Dados</div>
+  <div class="step done"><span class="dot"></span>Arquitetura</div>
+  <div class="step on"><span class="dot"></span>Treino</div>
+  <div class="step"><span class="dot"></span>Prever</div>
+  <div class="side-foot"><button class="ghost">Abrir rede</button><button class="ghost">Salvar</button></div>
+</aside>
+<main>
+  <header>
+    <div>
+      <h1 class="wide">Treino</h1>
+      <div class="sub">iris.csv · 4 → 8 tanh → 6 relu → 3 sigmoid · época 312 de 500</div>
+    </div>
+    <button class="primary">Pausar</button>
+  </header>
+
+  <section class="stage">
+    <div class="card">
+      <div class="lbl wide">Rede</div>
+      <svg class="net" id="net" viewBox="0 0 520 380" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="card">
+      <div class="lbl wide">Erro (MSE)</div>
+      <svg class="chart" id="chart" viewBox="0 0 400 220" preserveAspectRatio="none"></svg>
+      <div class="legend"><span><i style="background:#f2f2f3"></i>Treino</span><span><i style="background:#6b6b73;height:0;border-top:2px dashed #8b8b93"></i>Validação</span></div>
+      <div class="stats">
+        <div><span class="lbl wide">Treino</span><b class="mono">0,0214</b></div>
+        <div><span class="lbl wide">Validação</span><b class="mono">0,0287</b></div>
+        <div><span class="lbl wide">Teste</span><b class="mono" style="color:var(--t3)">—</b></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <label class="field">Taxa <input class="mono" value="0,01"></label>
+    <label class="field">Épocas <input class="mono" value="500"></label>
+    <label class="field">Semente <input class="mono" value="42"></label>
+    <div class="bar"><span></span></div>
+    <span class="mono">62%</span>
+  </footer>
+</main>
+<script>
+// desenho ilustrativo (mockup): rede 4-8-6-3 e curvas de MSE
+const L=[4,8,6,3],W=520,H=380,net=document.getElementById('net');let s='';
+const pos=L.map((n,i)=>Array.from({length:n},(_,j)=>[40+i*(W-80)/(L.length-1),H/2+(j-(n-1)/2)*40]));
+let seed=7;const r=()=>(seed=(seed*16807)%2147483647)/2147483647;
+for(let i=0;i<L.length-1;i++)for(const a of pos[i])for(const b of pos[i+1]){const w=r()*2-1;s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${w>0?'#f2f2f3':'#6b6b73'}" stroke-opacity="${(Math.abs(w)*.5+.05).toFixed(2)}" stroke-width="${(Math.abs(w)*1.6+.3).toFixed(2)}"/>`}
+pos.forEach((c,i)=>c.forEach(([x,y])=>{const a=r();s+=`<circle cx="${x}" cy="${y}" r="9" fill="#18181b" stroke="#2e2e33"/><circle class="${i? 'n-live':''}" style="animation-delay:${(r()*1.5).toFixed(2)}s" cx="${x}" cy="${y}" r="${(3+a*4).toFixed(1)}" fill="#f2f2f3" fill-opacity="${(.3+a*.7).toFixed(2)}"/>`}));
+['entrada','tanh','relu','sigmoid'].forEach((t,i)=>s+=`<text x="${pos[i][0][0]}" y="372" fill="#6b6b73" font-size="10" text-anchor="middle" font-family="Archivo" letter-spacing="1.5">${t.toUpperCase()}</text>`);
+net.innerHTML=s;
+const ch=document.getElementById('chart');let t='',v='';
+for(let e=0;e<=312;e+=4){const x=e/500*400,tr=.25*Math.exp(-e/60)+.02,va=.26*Math.exp(-e/70)+.028+Math.sin(e/9)*.002;t+=`${e?'L':'M'}${x.toFixed(1)},${(210-tr*780).toFixed(1)}`;v+=`${e?'L':'M'}${x.toFixed(1)},${(210-va*780).toFixed(1)}`}
+ch.innerHTML=[50,100,150,200].map(y=>`<line x1="0" x2="400" y1="${y}" y2="${y}" stroke="#232327" vector-effect="non-scaling-stroke"/>`).join('')+
+`<path d="${v}" fill="none" stroke="#8b8b93" stroke-dasharray="4 4" stroke-width="1.5" vector-effect="non-scaling-stroke"/><path d="${t}" fill="none" stroke="#f2f2f3" stroke-width="1.75" vector-effect="non-scaling-stroke"/>`;
+</script>
+</body>
+</html>
