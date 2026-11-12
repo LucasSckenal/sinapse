@@ -51,6 +51,7 @@ export function preverScreen(): HTMLElement {
   const net3d = predictNetFor(model);
   const netHost = net3d.el;
   let expected: Decoded[] | null = pendingExpected;
+  let lastManual = 0;
   pendingExpected = null;
 
   const showOutputs = (decoded: Decoded[] | null) => {
@@ -163,6 +164,7 @@ export function preverScreen(): HTMLElement {
     try {
       const r = predictColumns(model, values);
       showOutputs(r.decoded);
+      lastManual = performance.now();
       net3d.light();
     } catch (e) {
       errBox.replaceChildren(notice((e as Error).message, 'err'));
@@ -289,5 +291,21 @@ export function preverScreen(): HTMLElement {
 
   // depois de "Linha do dataset", roda a previsão já com o esperado
   if (expected) queueMicrotask(run);
+
+  // animação contínua: linhas do dataset passando pela rede (para alguns segundos depois de uma previsão sua)
+  const idle = setInterval(() => {
+    if (!el.isConnected) {
+      clearInterval(idle);
+      return;
+    }
+    if (!canSample || !t || performance.now() - lastManual < 7000) return;
+    try {
+      const row = t.rows[Math.floor(Math.random() * t.rows.length)];
+      predictColumns(model, cods.map((c) => readValue(c, cellText(c, row))));
+      net3d.light();
+    } catch {
+      /* linha que não serve para esta rede: espera a próxima */
+    }
+  }, 2600);
   return el;
 }

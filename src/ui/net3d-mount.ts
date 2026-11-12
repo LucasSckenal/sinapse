@@ -20,7 +20,7 @@ export function activationsOf(model: Model): number[][] {
 export interface NetHandle {
   setWeights(m: SavedModel): void;
   wave(acts: number[][], strong?: boolean): void;
-  cycle(c: Cycle, strong?: boolean): void;
+  cycle(c: Cycle, strong?: boolean, flash?: boolean): void;
   dispose(): void;
 }
 
@@ -63,9 +63,9 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
       net3d?.wavePass(acts, strong);
       flat?.cycle(acts);
     },
-    cycle(c, strong) {
-      net3d?.cycle(c, strong);
-      flat?.cycle(c.acts, c.deltas);
+    cycle(c, strong, flash = true) {
+      net3d?.cycle(c, strong, flash);
+      flat?.cycle(c.acts, c.deltas, flash);
     },
     dispose() {
       disposed = true;

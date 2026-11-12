@@ -230,6 +230,20 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .split-fields .field > span { display: flex; align-items: center; gap: 8px; }
 .split-fields .sw { width: 8px; height: 8px; border-radius: 3px; }
 .counts { font-size: 12px; color: var(--t3); }
+.preview-scroll { overflow-x: auto; margin: 0 -8px; }
+table.preview { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+table.preview th, table.preview td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.preview th { font-family: var(--font); font-weight: 400; color: var(--t2); }
+table.preview th.out, table.preview td.out { color: var(--t1); }
+table.preview th.out::after { content: ' · saída'; color: var(--t3); }
+table.preview .off { color: var(--t3); opacity: 0.6; }
+table.preview td.in { color: var(--t2); }
+.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border-radius: var(--r3); overflow: hidden; border: 1px solid var(--line); }
+.explain > div { background: var(--s1); padding: 22px 24px; display: grid; gap: 10px; align-content: start; }
+.explain h3 { font-size: 13px; font-weight: 300; font-variation-settings: 'wdth' 125; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t1); }
+.explain p { font-size: 13px; line-height: 1.6; color: var(--t2); }
+.explain b { color: var(--t1); font-weight: 500; }
+.explain code { font-family: var(--mono); font-size: 12px; color: var(--t1); background: var(--s2); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
 .stat-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
 .acc { font-size: 13px; color: var(--t1); }
 
@@ -359,6 +373,7 @@ canvas.boundary { width: 100%; aspect-ratio: 1; border-radius: 14px; display: bl
   main { padding: 28px 16px 40px; }
   .grid2 { grid-template-columns: 1fr; }
   .train-grid { grid-template-columns: 1fr; }
+  .explain { grid-template-columns: 1fr; }
   .stage-card { position: relative; top: 0; height: 440px; }
   .hint-drag { display: none; }
   .netview { min-height: 0; height: auto; }

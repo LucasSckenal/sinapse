@@ -127,7 +127,7 @@ export class NetView {
    * O mesmo ciclo da cena 3D, no plano: a ida acende os nós com a ativação, o erro volta
    * (pulsos cinza, da saída para a entrada) e as ligações piscam quando os pesos mudam.
    */
-  cycle(acts: number[][], deltas?: number[][]): void {
+  cycle(acts: number[][], deltas?: number[][], flash = true): void {
     if (!this.weights) return;
     const hop = 0.32;
     const L = this.nodeDots.length - 1;
@@ -162,7 +162,7 @@ export class NetView {
         for (const { l: ln } of pick(l, (i, _j, w) => (Math.abs(deltas[l]?.[i] ?? 0) / m) * Math.abs(w), 10))
           this.pulses.push({ x1: ln.x2, y1: ln.y2, x2: ln.x1, y2: ln.y1, delay: fwd + (L - 1 - l) * hop + Math.random() * 0.05, t: 0, s: 0.7, back: true });
       }
-      this.flashAt = this.clock + fwd + L * hop + 0.2;
+      if (flash) this.flashAt = this.clock + fwd + L * hop + 0.2;
     }
     this.start();
   }

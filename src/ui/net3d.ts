@@ -512,7 +512,7 @@ export class Net3D extends Stage {
    * O ciclo inteiro de um exemplo: a ida acende a rede camada a camada; se vierem os deltas,
    * o erro volta da saída para a entrada; no fim as ligações piscam (os pesos foram atualizados).
    */
-  cycle(c: Cycle, strong = false): void {
+  cycle(c: Cycle, strong = false, flash = true): void {
     this.wavePass(c.acts, strong);
     if (!c.deltas || !this.model) return;
     const hop = strong ? 0.42 : 0.3;
@@ -535,7 +535,7 @@ export class Net3D extends Stage {
         this.pulses.push({ edge: e, t: 0, delay: forwardTime + step * hop + Math.random() * 0.06, strength: Math.min(1, 0.25 + s / top), back: true });
       }
     }
-    this.flashAt = this.time + forwardTime + L * hop + 0.2;
+    if (flash) this.flashAt = this.time + forwardTime + L * hop + 0.2;
   }
 
   /** Rótulos de cada camada (e letra de cada bloco), presos à cena e reprojetados a cada quadro. */

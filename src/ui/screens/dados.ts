@@ -145,6 +145,30 @@ function columnsCard(table: Table): HTMLElement {
   );
 }
 
+/** As primeiras linhas como foram lidas: dá para ver na hora se o arquivo foi entendido certo. */
+function previewCard(table: Table): HTMLElement {
+  const cell = (r: number[], j: number) => {
+    const k = table.classes[j];
+    return k ? k[r[j]] : fmt(r[j], Number.isInteger(r[j]) ? 0 : 3);
+  };
+  const role = (j: number) => (state.selection.inputs.includes(j) ? 'in' : state.selection.outputs.includes(j) ? 'out' : 'off');
+  return h(
+    'section',
+    { class: 'card preview-card' },
+    h('div', { class: 'card-head' }, h('span', { class: 'lbl wide' }, 'Como o arquivo foi lido'), h('span', { class: 'lbl mono' }, `${table.rows.length} linhas × ${table.headers.length} colunas`)),
+    h(
+      'div',
+      { class: 'preview-scroll' },
+      h(
+        'table',
+        { class: 'preview mono' },
+        h('thead', null, h('tr', null, table.headers.map((name, j) => h('th', { class: role(j) }, name)))),
+        h('tbody', null, table.rows.slice(0, 6).map((r) => h('tr', null, table.headers.map((_, j) => h('td', { class: role(j) }, cell(r, j)))))),
+      ),
+    ),
+  );
+}
+
 function splitCard(table: Table): HTMLElement {
   const p = state.percent;
   let err = '';
@@ -234,5 +258,6 @@ export function dadosScreen(): HTMLElement {
     ),
     state.status === 'rodando' || state.status === 'pausado' ? notice('Há um treino em andamento. O que mudar aqui vale no próximo treino.') : null,
     h('div', { class: 'grid2' }, columnsCard(t), splitCard(t)),
+    previewCard(t),
   );
 }

@@ -1,3 +1,5 @@
+import { selectColumns, splitSizes } from '../../core/dataset';
+import { NORMALIZATION_LABELS, normalizeRows } from '../../core/normalization';
 import { deserialize, serialize, type SavedModel } from '../../core/persistence';
 import { Boundary, boundaryKind } from '../boundary';
 import { MseChart } from '../chart';
@@ -115,8 +117,22 @@ export function treinoScreen(): HTMLElement {
 
   // um exemplo de treino fazendo o ciclo inteiro: ida, erro voltando, pesos atualizados
   let lastWave = 0;
-  const waveFrom = (m: typeof model) => {
-    const tr = currentSplit?.treino;
+  // exemplos para a animação parada: os do treino atual ou, sem treino ainda, os do dataset aberto
+  let idleSamples: { inputs: number[][]; targets: number[][] } | null = null;
+  const samples = () => {
+    if (currentSplit?.treino.inputs.length) return currentSplit.treino;
+    if (idleSamples) return idleSamples;
+    try {
+      if (!state.table || !compatible) return null;
+      const s = selectColumns(state.table, state.selection);
+      idleSamples = { inputs: normalizeRows(liveModel.normalization, s.inputs), targets: s.targets };
+      return idleSamples;
+    } catch {
+      return null;
+    }
+  };
+  const waveFrom = (m: typeof model, flash = true) => {
+    const tr = samples();
     if (!tr || tr.inputs.length === 0) return;
     const now = performance.now();
     if (now - lastWave < 1900) return;
@@ -124,8 +140,8 @@ export function treinoScreen(): HTMLElement {
     try {
       const k = Math.floor(Math.random() * tr.inputs.length);
       const c = cycleOf(m, tr.inputs[k], tr.targets[k]);
-      if (v.view === 'plano') v.flat.cycle(c.acts, c.deltas);
-      else v.net.cycle(c);
+      if (v.view === 'plano') v.flat.cycle(c.acts, c.deltas, flash);
+      else if (v.view === 'rede') v.net.cycle(c, false, flash);
     } catch {
       /* arquitetura mudou no meio: ignora */
     }
@@ -192,8 +208,14 @@ export function treinoScreen(): HTMLElement {
     }
     paint();
   });
+  // a animação não para: sem treino rodando, um exemplo continua passando pela rede (sem mexer nos pesos)
+  const idle = setInterval(() => {
+    if (state.status !== 'rodando') waveFrom(liveModel, false);
+  }, 2100);
+  queueMicrotask(() => state.status !== 'rodando' && waveFrom(liveModel, false));
   cleanup = () => {
     off();
+    clearInterval(idle);
     chart.disconnect();
   };
 
@@ -317,6 +339,7 @@ export function treinoScreen(): HTMLElement {
         ),
       ),
     ),
+    explainCard(),
     h(
       'div',
       { class: 'train-foot' },
@@ -330,6 +353,46 @@ export function treinoScreen(): HTMLElement {
       h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Progresso do treino', 'aria-valuemin': 0, 'aria-valuemax': 100 }, bar),
       pct,
       h('span', { style: 'font-size:13px;color:var(--t2);display:flex;align-items:center' }, h('i', { class: `status-dot ${running ? 'live' : ''}` }), statusTxt),
+    ),
+  );
+}
+
+/** Como a divisão, o treino e o ajuste dos pesos foram feitos, com os números desta execução. */
+function explainCard(): HTMLElement {
+  const n = state.table?.rows.length ?? 0;
+  const p = state.percent;
+  const [a, b, c] = state.splitCounts ?? splitSizes(n, p);
+  const pct = (x: number) => `${String(x).replace('.', ',')}%`;
+  const norm = state.normalization;
+  const normTxt =
+    norm === 'nenhuma'
+      ? 'Sem normalização: as entradas entram como estão no arquivo.'
+      : `${NORMALIZATION_LABELS[norm]} calculado só com o conjunto de treino (${norm === 'minmax' ? 'mínimo e máximo' : 'média e desvio-padrão'} de cada entrada) e aplicado aos três conjuntos e à previsão. As saídas não são normalizadas.`;
+  const lr = String(state.learningRate).replace('.', ',');
+  const done = state.history.length;
+  const ajustes = done * a;
+  const block = (title: string, ...body: (HTMLElement | string)[]) => h('div', null, h('h3', null, title), ...body);
+  return h(
+    'section',
+    { class: 'explain', 'aria-label': 'Como foi feito' },
+    block(
+      'Divisão',
+      h('p', null, 'As ', h('b', null, `${n} linhas`), ` foram embaralhadas (Fisher-Yates) com a semente `, h('code', null, String(state.splitSeed)), ' e cortadas em:'),
+      h('p', null, h('b', null, `${a} de treino`), ` (${pct(p.treino)}) · `, h('b', null, `${b} de validação`), ` (${pct(p.validacao)}) · `, h('b', null, `${c} de teste`), ` (${pct(p.teste)}).`),
+      h('p', null, normTxt),
+    ),
+    block(
+      'Treinamento',
+      h('p', null, h('b', null, 'SGD'), `: a cada época, os ${a} exemplos de treino são embaralhados (semente `, h('code', null, String(state.trainSeed)), ') e passam ', h('b', null, 'um de cada vez'), ': propagação → erro → retropropagação → ajuste.'),
+      h('p', null, 'No fim de cada época calcula o MSE do treino e da validação. A validação só mede, nunca ajusta. O teste só é usado no fim.'),
+      h('p', null, h('code', null, `${state.epochs} épocas`), ' · taxa ', h('code', null, `η = ${lr}`), done ? ` · ${done} épocas feitas` : ''),
+    ),
+    block(
+      'Ajuste dos pesos',
+      h('p', null, 'Não é por conjunto (lote): o ajuste acontece ', h('b', null, 'depois de cada exemplo'), '. Primeiro calcula todos os deltas, com os pesos de antes:'),
+      h('p', null, h('code', null, 'δ saída = (o − t) · f′(z)'), ' ', h('code', null, 'δ oculta = f′(z) · Σ w·δ')),
+      h('p', null, 'Só depois atualiza: ', h('code', null, 'w ← w − η · δ · x'), ' ', h('code', null, 'b ← b − η · δ')),
+      h('p', null, ajustes ? `Até agora foram ${ajustes.toLocaleString('pt-BR')} ajustes (${done} épocas × ${a} exemplos).` : `Cada época faz ${a} ajustes, um por exemplo de treino.`),
     ),
   );
 }
