@@ -37,15 +37,35 @@ function splitLine(line: string, sep: string): string[] {
   return out;
 }
 
-function detectSeparator(line: string): string {
-  const counts = [',', ';', '\t'].map((s) => [s, line.split(s).length] as const);
-  counts.sort((a, b) => b[1] - a[1]);
-  return counts[0][1] > 1 ? counts[0][0] : ',';
+/**
+ * Descobre o separador olhando as primeiras linhas: o que dá o mesmo número de colunas (> 1)
+ * em todas elas. Em empate, ; e tab ganham da vírgula (a vírgula pode ser a casa decimal).
+ */
+function detectSeparator(lines: string[]): string {
+  const sample = lines.slice(0, 8);
+  const cands = [';', '\t', ',', '|'];
+  let best = ',';
+  let bestScore = -1;
+  for (const s of cands) {
+    const counts = sample.map((l) => splitLine(l, s).length);
+    const n = counts[0];
+    if (n < 2) continue;
+    const consistent = counts.every((c) => c === n);
+    const score = (consistent ? 1000 : 0) + n;
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return best;
 }
 
-function toNumber(cell: string): number {
-  if (cell === '') return NaN;
-  return Number(cell);
+/** Número com ponto, ou com vírgula decimal quando o separador não é a vírgula (5,1 → 5.1). */
+function toNumber(cell: string, sep = ','): number {
+  let c = cell.trim();
+  if (c === '') return NaN;
+  if (sep !== ',' && /^[+-]?\d*,\d+(e[+-]?\d+)?$/i.test(c)) c = c.replace(',', '.');
+  return Number(c);
 }
 
 /**
@@ -53,14 +73,15 @@ function toNumber(cell: string): number {
  * coluna de rótulos (classes); coluna que mistura números e texto é acusada com a linha.
  */
 export function parseCSV(text: string): Table {
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim() !== '');
+  const lines = text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/).filter((l) => l.trim() !== ''); // \r\n, \n ou só \r (Excel antigo)
   if (lines.length === 0) throw new Error('O arquivo está vazio.');
-  const sep = detectSeparator(lines[0]);
+  const sep = detectSeparator(lines);
+  const num = (c: string) => toNumber(c, sep);
   const first = splitLine(lines[0], sep);
   const body0 = lines.slice(1).map((l) => splitLine(l, sep));
   // cabeçalho: a primeira linha tem texto onde as outras linhas, em sua maioria, têm número
-  const numericShare = (col: number) => body0.filter((r) => Number.isFinite(toNumber(r[col] ?? ''))).length / Math.max(1, body0.length);
-  const hasHeader = body0.length === 0 ? first.some((c) => Number.isNaN(toNumber(c))) : first.some((c, j) => Number.isNaN(toNumber(c)) && (numericShare(j) > 0.5 || body0.every((r) => r[j] !== c)));
+  const numericShare = (col: number) => body0.filter((r) => Number.isFinite(num(r[col] ?? ''))).length / Math.max(1, body0.length);
+  const hasHeader = body0.length === 0 ? first.some((c) => Number.isNaN(num(c))) : first.some((c, j) => Number.isNaN(num(c)) && (numericShare(j) > 0.5 || body0.every((r) => r[j] !== c)));
   const headers = hasHeader ? first.map((h, i) => h || `coluna ${i + 1}`) : first.map((_, i) => `coluna ${i + 1}`);
   const cellsRows = hasHeader ? body0 : [first, ...body0];
   if (cellsRows.length === 0) throw new Error('O arquivo só tem o cabeçalho, sem nenhuma linha de dados.');
@@ -73,7 +94,7 @@ export function parseCSV(text: string): Table {
     });
   });
   const classes: (string[] | null)[] = headers.map((_, j) => {
-    const texts = cellsRows.map((r, i) => [r[j], i] as const).filter(([c]) => !Number.isFinite(toNumber(c)));
+    const texts = cellsRows.map((r, i) => [r[j], i] as const).filter(([c]) => !Number.isFinite(num(c)));
     if (texts.length === 0) return null;
     if (texts.length < cellsRows.length) {
       // coluna misturada: número e texto juntos é erro de digitação, não rótulo
@@ -85,7 +106,7 @@ export function parseCSV(text: string): Table {
       throw new Error(`A coluna "${headers[j]}" tem ${list.length} textos diferentes; o máximo de classes é ${MAX_CLASSES}.`);
     return list;
   });
-  const rows = cellsRows.map((cells) => cells.map((c, j) => (classes[j] ? classes[j]!.indexOf(c) : toNumber(c))));
+  const rows = cellsRows.map((cells) => cells.map((c, j) => (classes[j] ? classes[j]!.indexOf(c) : num(c))));
   return { headers, rows, classes };
 }
 

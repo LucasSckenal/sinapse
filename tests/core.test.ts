@@ -179,6 +179,19 @@ describe('datasets', () => {
     expect(t.rows).toHaveLength(10);
   });
 
+  it('lê CSV com \r, ponto e vírgula e vírgula decimal (formato do Excel em português)', () => {
+    const t = parseCSV('comp;larg;especie\r5,1;3,5;setosa\r7,0;3,2;versicolor\r6,3;3,3;virginica\r');
+    expect(t.headers).toEqual(['comp', 'larg', 'especie']);
+    expect(t.rows).toHaveLength(3);
+    expect(t.rows[0][0]).toBeCloseTo(5.1);
+    expect(t.classes[0]).toBeNull();
+    expect(t.classes[2]).toEqual(['setosa', 'versicolor', 'virginica']);
+    const tab = parseCSV('a\tb\n1,5\t2\n3\t4,25\n');
+    expect(tab.rows[1][1]).toBeCloseTo(4.25);
+    // com vírgula como separador, a vírgula não é decimal
+    expect(parseCSV('a,b\n1.5,2\n').rows[0]).toEqual([1.5, 2]);
+  });
+
   it('acusa linha com texto ou colunas a mais', () => {
     expect(() => parseCSV('a,b\n1,2\n3,x\n')).toThrow(/"x" não é um número/);
     expect(() => parseCSV('a,b\n1,2\n3,4,5\n')).toThrow(/3 colunas/);
