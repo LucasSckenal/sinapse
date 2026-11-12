@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Sinapse 3D — mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0b0c;--s1:#121214;--s2:#18181b;--line:#232327;--line2:#2e2e33;--t1:#f2f2f3;--t2:#a6a6ad;--t3:#8a8a92}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--t1);font:14px/1.5 Archivo,system-ui;display:grid;grid-template-columns:232px 1fr;height:100vh;overflow:hidden}
+.wide{font-stretch:125%;font-weight:300;text-transform:uppercase;letter-spacing:.04em}
+.mono{font-family:"JetBrains Mono",monospace}
+aside{border-right:1px solid var(--line);padding:28px 16px;display:flex;flex-direction:column;gap:4px}
+.brand{font-size:15px;padding:0 12px 28px}
+.step{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;color:var(--t2)}
+.step.on{background:var(--s2);color:var(--t1)}
+.dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--t3)}.step.done .dot{background:var(--t2)}.step.on .dot{background:#fff;box-shadow:0 0 0 4px #ffffff14}
+main{padding:36px 48px;display:grid;grid-template-rows:auto 1fr auto;gap:24px;min-width:0;min-height:0}
+header{display:flex;justify-content:space-between;align-items:flex-end}
+h1{font-size:44px;line-height:1}.sub{color:var(--t3);font-size:13px;margin-top:10px}
+.btn{border-radius:999px;padding:12px 24px;font:500 12px Archivo;font-stretch:115%;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line2);background:none;color:var(--t1)}
+.btn.p{background:#fff;color:#0b0b0c;border-color:#fff}
+.stage{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;min-height:0}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px;min-height:0;position:relative;overflow:hidden}
+.lbl{font-size:11px;color:var(--t3);letter-spacing:.14em}
+.seg{display:inline-flex;background:var(--s2);border:1px solid var(--line2);border-radius:10px;padding:3px;gap:2px}
+.seg b{font-weight:400;padding:6px 12px;border-radius:7px;font-size:12px;color:var(--t2)}.seg b.on{background:#f2f2f3;color:#0b0b0c}
+#three{position:absolute;inset:0}
+.overlay{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center}
+.legend3d{position:absolute;left:20px;bottom:18px;z-index:1;font-size:11px;color:var(--t3);display:flex;gap:16px}
+.right{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:20px;min-height:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:20px;min-height:0}
+canvas.map{width:100%;flex:1;min-height:0;object-fit:contain;border-radius:14px;display:block}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:14px;overflow:hidden}
+.stats div{background:var(--s1);padding:12px 14px}.stats b{display:block;font:400 18px "JetBrains Mono";margin-top:4px}
+footer{display:flex;gap:24px;align-items:center;border-top:1px solid var(--line);padding-top:18px;color:var(--t2);font-size:13px}
+.in{width:84px;background:var(--s2);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;font:13px "JetBrains Mono";color:var(--t1)}
+.bar{flex:1;height:3px;background:var(--line2);border-radius:3px}.bar span{display:block;height:100%;width:58%;background:#f2f2f3}
+svg.chart{width:100%;height:120px}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand wide">Sinapse</div>
+  <div class="step done"><span class="dot"></span>Dados</div>
+  <div class="step done"><span class="dot"></span>Arquitetura</div>
+  <div class="step on"><span class="dot"></span>Treino</div>
+  <div class="step"><span class="dot"></span>Prever</div>
+</aside>
+<main>
+  <header>
+    <div><h1 class="wide">Treino</h1><div class="sub mono">circulo.csv · 2 → 12 relu → 12 relu → 2 sigmoid · época 232 de 400</div></div>
+    <div style="display:flex;gap:10px"><button class="btn">Parar</button><button class="btn p">Pausar</button></div>
+  </header>
+  <section class="stage">
+    <div class="card">
+      <div class="overlay"><span class="lbl wide">Rede</span><span class="seg"><b class="on">Rede</b><b>Superfície do erro</b></span></div>
+      <div id="three"></div>
+      <div class="legend3d"><span>— peso positivo</span><span style="color:#5b5b63">— negativo</span><span>● pulso = um exemplo passando</span><span>arraste para girar</span></div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="overlay"><span class="lbl wide">Fronteira</span><span class="lbl mono">dentro ●  fora ○</span></div>
+        <canvas class="map" id="map" width="360" height="360"></canvas>
+      </div>
+      <div class="card" style="gap:10px">
+        <span class="lbl wide">Erro (MSE)</span>
+        <svg class="chart" id="chart" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+        <div class="stats"><div><span class="lbl wide">Treino</span><b>0,0214</b></div><div><span class="lbl wide">Validação</span><b>0,0287</b></div><div><span class="lbl wide">Teste</span><b style="color:var(--t3)">—</b></div></div>
+      </div>
+    </div>
+  </section>
+  <footer>
+    <span>Taxa</span><span class="in">0,05</span><span>Épocas</span><span class="in">400</span><span>Semente</span><span class="in">42</span>
+    <div class="bar"><span></span></div><span class="mono">58%</span>
+  </footer>
+</main>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+// MOCKUP: pesos e pontos ilustrativos
+let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;
+const host=document.getElementById('three');
+const W=host.clientWidth,H=host.clientHeight;
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(W,H);host.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x121214,9,22);
+const cam=new THREE.PerspectiveCamera(38,W/H,.1,100);cam.position.set(3.2,2.6,13.5);cam.lookAt(0,-.2,0);
+const SURF=location.hash==='#superficie';if(SURF){document.querySelectorAll('.seg b').forEach((b,i)=>b.classList.toggle('on',i===1));document.querySelector('.overlay .lbl').textContent='Superfície do erro';document.querySelector('.legend3d').innerHTML='<span>MSE do treino variando dois pesos (w₁, w₂)</span><span>● caminho do SGD</span>';}
+const L=SURF?[]:[2,12,12,2];const pos=[];const g=new THREE.Group();scene.add(g);
+L.forEach((n,i)=>{const col=[];const cols=n>4?4:1,rows=Math.ceil(n/cols);for(let j=0;j<n;j++){const c=j%cols,rr=Math.floor(j/cols);col.push(new THREE.Vector3((i-1.5)*3.2,(rr-(rows-1)/2)*0.95,(c-(cols-1)/2)*0.95));}pos.push(col);});
+const sphereG=new THREE.SphereGeometry(.17,32,16);
+pos.forEach((col,i)=>col.forEach(p=>{const a=i===0?.35:r();const m=new THREE.MeshBasicMaterial({color:new THREE.Color().setScalar(.25+a*.75)});const sp=new THREE.Mesh(sphereG,m);sp.position.copy(p);g.add(sp);
+ const halo=new THREE.Mesh(new THREE.SphereGeometry(.28,24,12),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:a*.12}));halo.position.copy(p);g.add(halo);}));
+const lines=[];
+for(let i=0;i<L.length-1;i++)for(const a of pos[i])for(const b of pos[i+1]){const w=r()*2-1;const geo=new THREE.BufferGeometry().setFromPoints([a,b]);const m=new THREE.LineBasicMaterial({color:w>0?0xf2f2f3:0x5b5b63,transparent:true,opacity:.05+Math.abs(w)**2*.55});g.add(new THREE.Line(geo,m));lines.push([a,b,w]);}
+const pulses=[];const pg=new THREE.SphereGeometry(.05,12,8);
+for(let k=0;k<(SURF?0:60);k++){const m=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true}));g.add(m);pulses.push({m,l:lines[Math.floor(r()*lines.length)],t:r()});}
+if(SURF){const N=80,geo=new THREE.PlaneGeometry(8,8,N,N);geo.rotateX(-Math.PI/2);const P=geo.attributes.position;const f=(x,z)=>.55*Math.log(1+((x-1.3)**2+(z+0.8)**2)*.9)+.25*Math.sin(x*1.3)*Math.cos(z*1.1)+.12*(x*.3);const cols=[];for(let i=0;i<P.count;i++){const x=P.getX(i),z=P.getZ(i),y=f(x,z);P.setY(i,y);const c=.15+Math.min(1,y/2.2)*.75;cols.push(c,c,c*1.02);}geo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));geo.computeVertexNormals();
+ g.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:.92,side:THREE.DoubleSide})));
+ g.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.PlaneGeometry(8,8,24,24).rotateX(-Math.PI/2).translate(0,0,0)),new THREE.LineBasicMaterial({color:0x2e2e33,transparent:true,opacity:0})));
+ const wire=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x0b0b0c,wireframe:true,transparent:true,opacity:.35}));g.add(wire);
+ let x=-3.2,z=3.1;const pts=[];for(let k=0;k<70;k++){pts.push(new THREE.Vector3(x,f(x,z)+.06,z));const h=1e-3,gx=(f(x+h,z)-f(x-h,z))/(2*h),gz=(f(x,z+h)-f(x,z-h))/(2*h);x-=.35*gx+(Math.random()-.5)*.05;z-=.35*gz+(Math.random()-.5)*.05;}
+ g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0xffffff})));
+ pts.forEach((p,i)=>{if(i%6)return;const m=new THREE.Mesh(new THREE.SphereGeometry(.05,10,8),new THREE.MeshBasicMaterial({color:0xffffff}));m.position.copy(p);g.add(m);});
+ const ball=new THREE.Mesh(new THREE.SphereGeometry(.16,24,16),new THREE.MeshBasicMaterial({color:0xffffff}));ball.position.copy(pts[48]);g.add(ball);
+ cam.position.set(7,6.5,9);cam.lookAt(0,.2,0);}
+let t0=performance.now();
+function frame(now){const t=(now-t0)/1000;g.rotation.y=Math.sin(t*.15)*(SURF?.15:.35);
+ for(const p of pulses){p.t+=.012;if(p.t>1){p.t=0;p.l=lines[Math.floor(Math.random()*lines.length)];}p.m.position.lerpVectors(p.l[0],p.l[1],p.t);p.m.material.opacity=Math.sin(p.t*Math.PI)*(.3+Math.abs(p.l[2])*.7);}
+ renderer.render(scene,cam);requestAnimationFrame(frame);}requestAnimationFrame(frame);
+// fronteira
+const cv=document.getElementById('map'),cx=cv.getContext('2d');const img=cx.createImageData(360,360);
+for(let y=0;y<360;y++)for(let x=0;x<360;x++){const u=x/180-1,v=y/180-1;const d=Math.sqrt(u*u+v*v);const p=1/(1+Math.exp((d-.6+.05*Math.sin(u*7))*14));const k=(y*360+x)*4;const c=18+p*70;img.data[k]=c;img.data[k+1]=c;img.data[k+2]=c+3;img.data[k+3]=255;}
+cx.putImageData(img,0,0);
+for(let i=0;i<220;i++){const u=r()*2-1,v=r()*2-1,inn=u*u+v*v<.36;cx.beginPath();cx.arc((u+1)*180,(v+1)*180,3.2,0,7);if(inn){cx.fillStyle='#f2f2f3';cx.fill();}else{cx.strokeStyle='#8a8a92';cx.lineWidth=1.2;cx.stroke();}}
+// curva
+let d='',v='';for(let e=0;e<=232;e+=4){const x=e/400*400;d+=(e?'L':'M')+x+','+(110-(.25*Math.exp(-e/50)+.02)*400);v+=(e?'L':'M')+x+','+(110-(.26*Math.exp(-e/60)+.03)*400);}
+document.getElementById('chart').innerHTML=`<path d="${v}" fill="none" stroke="#8b8b93" stroke-dasharray="4 4" stroke-width="1.5" vector-effect="non-scaling-stroke"/><path d="${d}" fill="none" stroke="#f2f2f3" stroke-width="1.75" vector-effect="non-scaling-stroke"/>`;
+</script>
+</body>
+</html>
