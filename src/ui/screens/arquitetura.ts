@@ -1,13 +1,15 @@
 import { ACTIVATION_NAMES, ACTIVATIONS, type ActivationName } from '../../core/activations';
-import { checkCompatibility, modelMeta, selectionWidths } from '../../core/dataset';
+import { checkCompatibility, codingsFor, modelMeta, selectionWidths } from '../../core/dataset';
+import { expandedNames } from '../../core/encoding';
 import { initFor } from '../../core/initialization';
-import { Network, type Architecture } from '../../core/network';
+import { Network, blocksOf, validateArchitecture, withBlocks, type Architecture, type BlockSpec } from '../../core/network';
 import { h, icon, notice, parseNum, segmented, stepper, toast } from '../dom';
 import { NetView } from '../netview';
 import { DEFAULT_HIDDEN, resetTraining, set, state } from '../state';
 
 const MAX_NEURONS = 256;
 const MAX_HIDDEN = 8;
+const MAX_BLOCKS = 6;
 /** Índice da camada recém-adicionada (só ela anima ao entrar). */
 let justAdded = -1;
 
@@ -31,43 +33,143 @@ function setArch(arch: Architecture): void {
   set({ arch });
 }
 
-function layerRow(i: number): HTMLElement {
+const LETTERS = 'ABCDEFGHIJKLMNOP';
+
+function blocksAt(arch: Architecture, i: number): BlockSpec[] {
+  return blocksOf(arch.layers[i]).map((b) => ({ ...b, ...(b.from ? { from: b.from.slice() } : {}) }));
+}
+
+/** Troca os blocos da camada i e conserta as origens da camada seguinte (índices de blocos). */
+function setBlocks(arch: Architecture, i: number, blocks: BlockSpec[], removed?: number): Architecture {
+  const layers = arch.layers.slice();
+  layers[i] = withBlocks(blocks);
+  if (removed !== undefined && i + 1 < layers.length) {
+    const next = blocksAt({ ...arch, layers }, i + 1).map((b) => {
+      if (!b.from) return b;
+      const from = b.from.filter((f) => f !== removed).map((f) => (f > removed ? f - 1 : f));
+      return from.length ? { ...b, from } : { neurons: b.neurons, activation: b.activation };
+    });
+    layers[i + 1] = withBlocks(next);
+  }
+  return { ...arch, layers };
+}
+
+/** Nomes do que a camada i pode receber: entradas (1ª camada) ou blocos da anterior. */
+function sourceNames(arch: Architecture, i: number): string[] {
+  if (i > 0) {
+    const prev = blocksOf(arch.layers[i - 1]);
+    return prev.map((b, k) => (prev.length > 1 ? `${LETTERS[k]} · ${b.neurons}` : `Oculta ${i}`));
+  }
+  const t = state.table;
+  if (t && selectionWidths(t, state.selection).inputs === arch.inputs) return expandedNames(codingsFor(t, state.selection.inputs));
+  return Array.from({ length: arch.inputs }, (_, k) => `entrada ${k + 1}`);
+}
+
+function blockRow(i: number, k: number): HTMLElement {
   const arch = state.arch;
-  const l = arch.layers[i];
+  const blocks = blocksAt(arch, i);
+  const b = blocks[k];
   const isOut = i === arch.layers.length - 1;
-  const update = (patch: Partial<typeof l>) => {
-    const layers = arch.layers.slice();
-    layers[i] = { ...l, ...patch };
+  const multi = blocks.length > 1;
+  const update = (patch: Partial<BlockSpec>) => {
+    const next = blocks.slice();
+    next[k] = { ...b, ...patch };
+    if ('from' in patch && patch.from === undefined) delete next[k].from;
+    setArch(setBlocks(arch, i, next));
+  };
+  const names = sourceNames(arch, i);
+  const active = new Set(b.from ?? names.map((_, n) => n));
+  const toggle = (n: number) => {
+    const set2 = new Set(active);
+    if (set2.has(n)) set2.delete(n);
+    else set2.add(n);
+    const from = [...set2].sort((x, y) => x - y);
+    update(from.length === names.length ? { from: undefined } : { from });
+  };
+  const label = `${isOut ? 'saída' : `oculta ${i + 1}`}${multi ? `, bloco ${LETTERS[k]}` : ''}`;
+  // a 1ª camada sempre mostra as entradas; as outras só quando há escolha (vários blocos atrás ou origem marcada)
+  const showSources = i === 0 ? multi || !!b.from : names.length > 1 || !!b.from;
+  return h(
+    'div',
+    { class: `block-row ${multi ? 'multi' : ''}` },
+    h(
+      'div',
+      { class: 'block-main' },
+      multi ? h('span', { class: 'block-tag mono', title: `Bloco ${LETTERS[k]}` }, LETTERS[k]) : null,
+      stepper(b.neurons, 1, MAX_NEURONS, (v) => update({ neurons: v }), `neurônios da camada ${label}`),
+      h(
+        'div',
+        { class: 'acts' },
+        segmented<ActivationName>(
+          ACTIVATION_NAMES.map((a) => ({ value: a, label: ACTIVATIONS[a].label })),
+          b.activation,
+          (a) => update({ activation: a }),
+          { label: `Função de ativação da camada ${label}` },
+        ),
+        h('span', { class: 'init', title: 'Inicialização dos pesos' }, initFor(b.activation) === 'he' ? 'He' : 'Xavier'),
+      ),
+      multi
+        ? h(
+            'button',
+            { type: 'button', class: 'icon-btn', 'aria-label': `Remover bloco ${LETTERS[k]} da camada ${isOut ? 'de saída' : `oculta ${i + 1}`}`, onclick: () => setArch(setBlocks(arch, i, blocks.filter((_, x) => x !== k), k)) },
+            icon('x'),
+          )
+        : null,
+    ),
+    showSources
+      ? h(
+          'div',
+          { class: 'sources' },
+          h('span', { class: 'src-label' }, 'recebe de'),
+          names.map((nm, n) =>
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'chip',
+                'aria-pressed': String(active.has(n)),
+                title: active.has(n) ? `Desligar ${nm}` : `Ligar ${nm}`,
+                onclick: () => toggle(n),
+              },
+              nm,
+            ),
+          ),
+          active.size === 0 ? h('span', { class: 'src-warn' }, 'marque ao menos uma') : null,
+        )
+      : null,
+  );
+}
+
+function layerGroup(i: number): HTMLElement {
+  const arch = state.arch;
+  const isOut = i === arch.layers.length - 1;
+  const blocks = blocksAt(arch, i);
+  const addBlock = () => {
+    const last = blocks[blocks.length - 1];
+    setArch(setBlocks(arch, i, [...blocks, { neurons: Math.max(1, Math.min(4, last.neurons)), activation: last.activation }]));
+  };
+  const removeLayer = () => {
+    const layers = arch.layers.filter((_, k) => k !== i);
+    // a camada que vinha depois perde as origens (elas apontavam para os blocos removidos)
+    if (layers[i]) layers[i] = withBlocks(blocksOf(layers[i]).map((b) => ({ neurons: b.neurons, activation: b.activation })));
     setArch({ ...arch, layers });
   };
   return h(
     'div',
-    { class: `layer-row ${i === justAdded ? 'new' : ''}` },
-    h('div', { class: 'name wide' }, isOut ? 'Saída' : `Oculta ${i + 1}`),
-    stepper(l.neurons, 1, MAX_NEURONS, (v) => update({ neurons: v }), `neurônios da camada ${isOut ? 'de saída' : `oculta ${i + 1}`}`),
+    { class: `layer-group ${i === justAdded ? 'new' : ''} ${blocks.length > 1 ? 'parallel' : ''}` },
     h(
       'div',
-      { class: 'acts' },
-      segmented<ActivationName>(
-        ACTIVATION_NAMES.map((a) => ({ value: a, label: ACTIVATIONS[a].label })),
-        l.activation,
-        (a) => update({ activation: a }),
-        { label: 'Função de ativação' },
+      { class: 'layer-head' },
+      h('div', { class: 'name wide' }, isOut ? 'Saída' : `Oculta ${i + 1}`),
+      blocks.length > 1 ? h('span', { class: 'muted', style: 'font-size:12px' }, `${blocks.length} blocos em paralelo`) : null,
+      h(
+        'div',
+        { class: 'layer-actions' },
+        h('button', { type: 'button', class: 'btn line small', disabled: blocks.length >= MAX_BLOCKS, onclick: addBlock, title: 'Adicionar um bloco em paralelo nesta camada' }, icon('plus'), 'Bloco'),
+        isOut ? null : h('button', { type: 'button', class: 'icon-btn', 'aria-label': `Remover camada oculta ${i + 1}`, onclick: removeLayer }, icon('x')),
       ),
-      h('span', { class: 'init', title: 'Inicialização dos pesos' }, initFor(l.activation) === 'he' ? 'He' : 'Xavier'),
     ),
-    isOut
-      ? h('span')
-      : h(
-          'button',
-          {
-            type: 'button',
-            class: 'icon-btn',
-            'aria-label': `Remover camada oculta ${i + 1}`,
-            onclick: () => setArch({ ...arch, layers: arch.layers.filter((_, k) => k !== i) }),
-          },
-          icon('x'),
-        ),
+    blocks.map((_, k) => blockRow(i, k)),
   );
 }
 
@@ -95,13 +197,27 @@ export function arquiteturaScreen(): HTMLElement {
   const hidden = arch.layers.length - 1;
   const busy = state.status === 'rodando' || state.status === 'pausado';
   const problems = state.table ? checkCompatibility(arch, state.table, state.selection) : [];
-  const total = arch.layers.reduce((acc, l, i) => acc + l.neurons * ((i === 0 ? arch.inputs : arch.layers[i - 1].neurons) + 1), 0);
+  let archError = '';
+  try {
+    validateArchitecture(arch);
+  } catch (e) {
+    archError = (e as Error).message;
+  }
+  let total = 0;
+  try {
+    total = Network.create(arch, 1).layers.reduce((acc, l) => acc + l.neurons.reduce((x, n) => x + n.weights.length + 1, 0), 0);
+  } catch {
+    total = 0;
+  }
 
   const addHidden = () => {
     const layers = arch.layers.slice();
     const prev = layers[layers.length - 2];
-    justAdded = layers.length - 1;
     layers.splice(layers.length - 1, 0, { neurons: prev?.neurons ?? 4, activation: prev?.activation ?? DEFAULT_HIDDEN });
+    justAdded = layers.length - 2;
+    // a saída passa a receber da camada nova: as origens antigas deixam de valer
+    const out = layers.length - 1;
+    layers[out] = withBlocks(blocksOf(layers[out]).map((b) => ({ neurons: b.neurons, activation: b.activation })));
     setArch({ ...arch, layers });
   };
 
@@ -131,13 +247,30 @@ export function arquiteturaScreen(): HTMLElement {
           { class: 'layers' },
           h(
             'div',
-            { class: 'layer-row' },
-            h('div', { class: 'name wide' }, 'Entradas'),
-            stepper(arch.inputs, 1, MAX_NEURONS, (v) => setArch({ ...arch, inputs: v }), 'entradas'),
-            h('div', { class: 'acts' }, h('span', { class: 'muted', style: 'font-size:12px' }, state.table ? `o dataset pede ${selectionWidths(state.table, state.selection).inputs}` : '')),
-            h('span'),
+            { class: 'layer-group' },
+            h(
+              'div',
+              { class: 'layer-head' },
+              h('div', { class: 'name wide' }, 'Entradas'),
+              stepper(
+                arch.inputs,
+                1,
+                MAX_NEURONS,
+                (v) => {
+                  // origens da 1ª camada que deixam de existir são descartadas
+                  const first = blocksAt(arch, 0).map((b) => {
+                    if (!b.from) return b;
+                    const from = b.from.filter((f) => f < v);
+                    return from.length ? { ...b, from } : { neurons: b.neurons, activation: b.activation };
+                  });
+                  setArch(setBlocks({ ...arch, inputs: v }, 0, first));
+                },
+                'entradas',
+              ),
+              h('span', { class: 'muted', style: 'font-size:12px' }, state.table ? `o dataset pede ${selectionWidths(state.table, state.selection).inputs}` : ''),
+            ),
           ),
-          arch.layers.map((_, i) => layerRow(i)),
+          arch.layers.map((_, i) => layerGroup(i)),
           ((justAdded = -1), null),
         ),
         h(
@@ -146,7 +279,8 @@ export function arquiteturaScreen(): HTMLElement {
           icon('plus'),
           'Camada oculta',
         ),
-        problems.length ? problems.map((p) => notice(p, 'err')) : state.table ? notice('Combina com o dataset.', 'ok') : null,
+        archError ? notice(archError, 'err') : null,
+        problems.length ? problems.map((p) => notice(p, 'err')) : state.table && !archError ? notice('Combina com o dataset.', 'ok') : null,
         h(
           'label',
           { class: 'field', style: 'max-width:200px' },

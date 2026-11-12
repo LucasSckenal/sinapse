@@ -84,5 +84,8 @@ export function resetTraining(): Partial<State> {
 }
 
 export function architectureText(arch: Architecture): string {
-  return [String(arch.inputs), ...arch.layers.map((l) => `${l.neurons} ${l.activation}`)].join(' → ');
+  return [
+    String(arch.inputs),
+    ...arch.layers.map((l) => (l.blocks && l.blocks.length > 1 ? `[${l.blocks.map((b) => `${b.neurons} ${b.activation}`).join(' ‖ ')}]` : `${l.neurons} ${l.activation}`)),
+  ].join(' → ');
 }

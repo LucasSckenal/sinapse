@@ -28,7 +28,9 @@ A pasta `dist/` funciona em qualquer servidor estático (`npm run preview` serve
    os percentuais de treino, validação e teste (precisam somar 100%), a semente da divisão e a normalização das entradas
    (Nenhuma, Min-Max ou Z-score).
 2. **Arquitetura:** número de entradas, camadas ocultas (adicionar e remover), neurônios e função de ativação de cada camada,
-   e a semente dos pesos. A tela avisa se a rede não combina com as colunas do dataset. **Criar rede** inicializa os pesos.
+   e a semente dos pesos. Cada camada pode ter **blocos em paralelo** (botão *+ Bloco*): cada bloco tem seus neurônios, sua
+   ativação e as origens que você marca em *recebe de* (na 1ª camada, as entradas; nas outras, os blocos da camada anterior).
+   A tela avisa se a rede não combina com as colunas do dataset. **Criar rede** inicializa os pesos.
 3. **Treino:** taxa de aprendizado, número de épocas e semente da ordem dos exemplos. Durante o treino aparecem a rede (as
    ligações mudam de espessura com o peso), a curva do MSE do treino e da validação a cada época, e no fim o MSE do teste.
    Dá para pausar, continuar e parar.
@@ -52,11 +54,26 @@ Uma coluna toda em texto (por exemplo `especie` com `setosa`, `versicolor`, `vir
 Coluna que mistura números e texto é tratada como erro de digitação e acusada com a linha. Célula vazia também é erro.
 O máximo é de 50 classes por coluna.
 
+### Blocos em paralelo
+
+Uma camada pode se dividir em blocos lado a lado. Exemplo: com as entradas `x, y, idade, renda`, a primeira camada pode ter
+um bloco A de 8 neurônios tanh ligado só a `x, y` e um bloco B de 4 neurônios ReLU ligado só a `idade, renda`; a camada
+seguinte recebe de A e B (ou só de um deles). As saídas dos blocos ficam em sequência, A primeiro.
+
+A matemática é a mesma da MLP: cada neurônio guarda de quais saídas da camada anterior ele recebe (`sources`), soma só
+essas (`z = Σ wₚ·x[origem p] + b`), e na retropropagação o delta de um neurônio oculto soma só os neurônios da camada
+seguinte que estão ligados a ele (`δⱼ = f′(zⱼ) · Σ wₖⱼ δₖ`, para os k que recebem de j). Uma camada sem blocos é a camada
+comum, ligada a tudo. Um teste compara esses gradientes com a derivada numérica numa rede com blocos.
+
 ### Visualizações (dados reais, nada decorativo)
 
-- **Rede 3D** (Treino): um nó por neurônio, cada ligação com a cor e o brilho do peso atual (branco = positivo, cinza =
-  negativo). Durante o treino, um exemplo de treino passa pela rede: os pulsos andam camada por camada e o brilho de cada nó
-  é a ativação daquele neurônio.
+- **Rede 3D ou 2D** (Treino, escolha em *3D / 2D*): um nó por neurônio, só as ligações que existem, cada uma com a cor e
+  o brilho do peso atual (branco = positivo, cinza = negativo); blocos em paralelo aparecem como grupos separados.
+  Durante o treino, um exemplo de treino faz o **ciclo inteiro**: os pulsos brancos vão camada por camada com o brilho de
+  cada nó igual à sua ativação, o erro volta da saída para a entrada (pulsos cinza, com a força dos deltas calculados de
+  verdade) e as ligações piscam quando os pesos são atualizados.
+- **Tela inicial**: uma rede de verdade (2 → 5 tanh → 1 sigmoid) aprendendo XOR ao vivo com o mesmo núcleo, mostrando o
+  mesmo ciclo e o erro caindo.
 - **Superfície do erro** (Treino): o MSE do treino quando só dois pesos variam (os dois que mais mudaram desde o começo) e os
   outros ficam como estão agora, com o caminho que esses dois pesos fizeram durante o treino. É calculada no worker.
 - **Fronteira** (Treino): com 2 entradas numéricas, a classe que a rede escolhe em cada ponto do plano, com os exemplos reais
@@ -158,6 +175,7 @@ tela não travar.
 | `camadas[].vieses[i]` | viés do neurônio *i* |
 | `normalizacao` | `null`, `{ "tipo": "minmax", "min": [...], "max": [...] }` ou `{ "tipo": "zscore", "media": [...], "desvio": [...] }`, um valor por entrada, calculados no treino |
 | `colunas` | opcional: nomes das posições, só para a tela rotular os campos |
+| `camadas[].blocos` | opcional: blocos em paralelo, na ordem dos neurônios, cada um `{ "neuronios", "ativacao", "origem"? }`; `origem` = índices das entradas (1ª camada) ou dos blocos da camada anterior; sem `origem`, o bloco recebe de tudo. Num bloco com origem, `pesos[i]` tem um peso por saída de origem, em ordem |
 | `codificacao` | opcional: como cada coluna do CSV virou números, `{ "entradas": [...], "saidas": [...] }`, cada item `{ "nome", "tipo": "numero" }` ou `{ "nome", "tipo": "classe", "classes": [...] }`; uma coluna de classe ocupa uma posição por classe, na ordem da lista |
 
 Ao abrir, o arquivo é conferido inteiro: formato, número de pesos por neurônio, números válidos e normalização com o tamanho
@@ -165,7 +183,7 @@ certo. A rede reconstruída dá exatamente as mesmas saídas da original. Há um
 
 ## Testes
 
-`npm test` roda 22 testes em `tests/core.test.ts`:
+`npm test` roda 26 testes em `tests/core.test.ts`:
 
 - as derivadas das quatro ativações batem com a derivada numérica;
 - Xavier e He são escolhidos pela ativação, com o desvio esperado, e a mesma semente dá os mesmos pesos;
@@ -179,7 +197,9 @@ certo. A rede reconstruída dá exatamente as mesmas saídas da original. Há um
 - uma rede salva e aberta dá as mesmas saídas, a previsão confere a quantidade de valores e um arquivo quebrado é recusado
   com uma mensagem clara;
 - coluna de texto vira classes (one-hot) e conta uma saída por classe; a classe vencedora e a taxa de acerto saem certas; a
-  rede com rótulos salva e abre com as classes.
+  rede com rótulos salva e abre com as classes;
+- blocos em paralelo: cada bloco só recebe das origens escolhidas, os gradientes batem com o numérico, a rede salva e abre
+  com os blocos, bloco sem origem é recusado e uma rede com dois blocos aprende XOR.
 
 ## Estrutura
 

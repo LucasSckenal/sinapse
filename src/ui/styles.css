@@ -246,6 +246,26 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .layer-row .init { font-size: 11px; color: var(--t3); margin-left: auto; }
 .layer-row .acts { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .add-layer { align-self: flex-start; }
+.layer-group { display: grid; gap: 8px; padding: 12px; border-radius: 16px; background: var(--s2); border: 1px solid transparent; transition: border-color var(--fast); }
+.layer-group:hover { border-color: var(--line2); }
+.layer-group.new { animation: enter var(--mid) var(--ease); }
+.layer-group.parallel { background: linear-gradient(var(--s2), var(--s2)) padding-box; border-color: var(--line2); }
+.layer-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-left: 4px; }
+.layer-head .name { font-size: 11px; color: var(--t2); letter-spacing: 0.12em; min-width: 84px; }
+.layer-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.block-row { display: grid; gap: 8px; padding: 8px; border-radius: 12px; }
+.block-row.multi { background: var(--s1); border: 1px solid var(--line); }
+.block-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.block-main .acts { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.block-main .init { font-size: 11px; color: var(--t3); margin-left: auto; }
+.block-tag { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--t1); color: var(--on-ac); font-size: 12px; font-weight: 500; flex: none; }
+.sources { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-left: 2px; }
+.src-label { font-size: 11px; color: var(--t3); margin-right: 4px; }
+.src-warn { font-size: 11px; color: var(--err); }
+.chip { border: 1px solid var(--line2); background: none; color: var(--t3); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: background var(--fast), color var(--fast), border-color var(--fast), transform var(--fast) var(--ease); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip:hover { color: var(--t1); border-color: var(--t3); }
+.chip:active { transform: scale(0.94); }
+.chip[aria-pressed='true'] { background: var(--t1); color: var(--on-ac); border-color: var(--t1); }
 
 /* ---------- rede e gráfico ---------- */
 .netview { width: 100%; height: 100%; min-height: 340px; display: block; }
@@ -338,6 +358,8 @@ canvas.boundary { width: 100%; aspect-ratio: 1; border-radius: 14px; display: bl
   .hint-drag { display: none; }
   .netview { min-height: 0; height: auto; }
   .layer-row { grid-template-columns: 1fr auto; }
+  .block-main { flex-wrap: wrap; }
+  .block-main .acts { flex-basis: 100%; flex-wrap: wrap; }
   .layer-row .acts { grid-column: 1 / -1; flex-wrap: wrap; }
   .layer-row .init { grid-column: 1; justify-self: start; }
   .split-fields { grid-template-columns: 1fr 1fr 1fr; }

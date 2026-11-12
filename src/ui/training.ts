@@ -15,7 +15,7 @@ export let currentSplit: Split | null = null;
 const MAX_TRACK = 6000;
 let track: Float32Array[] = [];
 function flatWeights(m: SavedModel): Float32Array | null {
-  const total = m.camadas.reduce((s, c) => s + c.neuronios * c.pesos[0].length, 0);
+  const total = m.camadas.reduce((s, c) => s + c.pesos.reduce((x, w) => x + w.length, 0), 0);
   if (total > MAX_TRACK) return null;
   const out = new Float32Array(total);
   let p = 0;
@@ -30,12 +30,12 @@ function recordTrack(m: SavedModel): void {
 }
 function refOf(m: SavedModel, flat: number): WeightRef {
   let p = flat;
-  for (let l = 0; l < m.camadas.length; l++) {
-    const fan = m.camadas[l].pesos[0].length;
-    const size = m.camadas[l].neuronios * fan;
-    if (p < size) return { layer: l, i: Math.floor(p / fan), j: p % fan };
-    p -= size;
-  }
+  for (let l = 0; l < m.camadas.length; l++)
+    for (let i = 0; i < m.camadas[l].pesos.length; i++) {
+      const n = m.camadas[l].pesos[i].length;
+      if (p < n) return { layer: l, i, j: p };
+      p -= n;
+    }
   return { layer: 0, i: 0, j: 0 };
 }
 

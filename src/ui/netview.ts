@@ -1,4 +1,5 @@
 import type { Architecture } from '../core/network';
+import { shownUnits, topology } from './topology';
 import type { SavedModel } from '../core/persistence';
 import { svg } from './dom';
 
@@ -24,7 +25,7 @@ interface Pulse2D {
 
 export class NetView {
   readonly el: SVGElement;
-  private lines: { el: SVGElement; layer: number; i: number; j: number; x1: number; y1: number; x2: number; y2: number }[] = [];
+  private lines: { el: SVGElement; layer: number; i: number; j: number; p: number; x1: number; y1: number; x2: number; y2: number }[] = [];
   private biasDots: { el: SVGElement; layer: number; i: number }[] = [];
   private nodeDots: SVGElement[][] = [];
   private gLines!: SVGElement;
@@ -45,13 +46,30 @@ export class NetView {
   }
 
   private build(arch: Architecture): void {
-    const sizes = [arch.inputs, ...arch.layers.map((l) => l.neurons)];
+    const topo = topology(arch);
+    const sizes = topo.sizes;
     const cols = sizes.length;
     const x = (c: number) => (cols === 1 ? W / 2 : 46 + (c * (W - 92)) / (cols - 1));
-    const gap = (n: number) => Math.min(38, (H - 90) / Math.max(1, n - 1));
-    const pos = sizes.map((n, c) => {
-      const shown = Math.min(n, MAX_SHOWN);
-      return Array.from({ length: shown }, (_, j) => [x(c), (H - 34) / 2 + (j - (shown - 1) / 2) * gap(shown)] as const);
+    // cada bloco mostra até MAX_SHOWN nós; blocos da mesma camada ficam separados por um vão
+    const shown = shownUnits(topo, MAX_SHOWN);
+    // vão extra entre blocos da mesma camada (além do espaço normal entre nós)
+    const BLOCK_GAP = 34;
+    const pos: Map<number, readonly [number, number]>[] = topo.blocks.map((blocks, c) => {
+      const counts = blocks.map((b) => Math.min(b.count, MAX_SHOWN));
+      const total = counts.reduce((a, b) => a + b, 0);
+      const gaps = (blocks.length - 1) * BLOCK_GAP;
+      const g = Math.min(38, (H - 100 - gaps) / Math.max(1, total - 1));
+      const height = (total - 1) * g + gaps;
+      let y = (H - 34) / 2 - height / 2;
+      const m = new Map<number, readonly [number, number]>();
+      blocks.forEach((b, k) => {
+        for (let u = 0; u < counts[k]; u++) {
+          m.set(b.start + u, [x(c), y] as const);
+          if (u < counts[k] - 1) y += g;
+        }
+        y += g + BLOCK_GAP;
+      });
+      return m;
     });
 
     const gLines = svg('g');
@@ -59,31 +77,47 @@ export class NetView {
     const gNodes = svg('g');
     this.gPulses = svg('g');
     for (let c = 0; c < cols - 1; c++)
-      pos[c + 1].forEach(([x2, y2], i) =>
-        pos[c].forEach(([x1, y1], j) => {
-          const el = svg('line', { x1, y1, x2, y2, stroke: '#f2f2f3', 'stroke-opacity': 0.12, 'stroke-width': 0.8 });
+      for (const i of shown[c + 1]) {
+        const to = pos[c + 1].get(i)!;
+        const src = topo.sources[c][i];
+        const n = src ? src.length : sizes[c];
+        for (let p = 0; p < n; p++) {
+          const j = src ? src[p] : p;
+          const from = pos[c].get(j);
+          if (!from) continue;
+          const el = svg('line', { x1: from[0], y1: from[1], x2: to[0], y2: to[1], stroke: '#f2f2f3', 'stroke-opacity': 0.12, 'stroke-width': 0.8 });
           gLines.appendChild(el);
-          this.lines.push({ el, layer: c, i, j, x1, y1, x2, y2 });
-        }),
-      );
-    pos.forEach((col, c) => {
+          this.lines.push({ el, layer: c, i, j, p, x1: from[0], y1: from[1], x2: to[0], y2: to[1] });
+        }
+      }
+    topo.blocks.forEach((blocks, c) => {
       this.nodeDots[c] = [];
-      col.forEach(([cx, cy], i) => {
+      // moldura discreta em volta de cada bloco quando a camada tem mais de um
+      if (blocks.length > 1)
+        blocks.forEach((b, k) => {
+          const ys = Array.from({ length: Math.min(b.count, MAX_SHOWN) }, (_, u) => pos[c].get(b.start + u)![1]);
+          gNodes.appendChild(svg('rect', { x: x(c) - 15, y: Math.min(...ys) - 13, width: 30, height: Math.max(...ys) - Math.min(...ys) + 26, rx: 13, fill: 'none', stroke: '#3a3a40', 'stroke-dasharray': '3 4' }));
+          const tag = svg('text', { x: x(c) - 22, y: Math.min(...ys) + 3, 'text-anchor': 'end', fill: '#8a8a92', 'font-size': 10, 'font-family': 'JetBrains Mono, monospace' });
+          tag.textContent = 'ABCDEFGHIJKLMNOP'[k];
+          gNodes.appendChild(tag);
+        });
+      for (const [i, [cx, cy]] of pos[c]) {
         const r = sizes[c] > MAX_SHOWN ? 7 : 9;
         gNodes.appendChild(svg('circle', { cx, cy, r, fill: '#18181b', stroke: c === 0 ? '#75757d' : '#3a3a40', 'stroke-width': 1.2 }));
         const dot = svg('circle', { cx, cy, r: 3, fill: '#f2f2f3', 'fill-opacity': c === 0 ? 0.35 : 0.5 });
         gNodes.appendChild(dot);
-        this.nodeDots[c].push(dot);
+        this.nodeDots[c][i] = dot;
         if (c > 0) this.biasDots.push({ el: dot, layer: c - 1, i });
-      });
-      if (sizes[c] > MAX_SHOWN) {
-        const last = col[col.length - 1];
-        const t = svg('text', { x: last[0] + 15, y: last[1] + 4, 'text-anchor': 'start', fill: '#75757d', 'font-size': 11, 'font-family': 'JetBrains Mono, monospace' });
-        t.textContent = `+${sizes[c] - MAX_SHOWN}`;
-        gNodes.appendChild(t);
       }
+      blocks.forEach((b) => {
+        if (b.count <= MAX_SHOWN) return;
+        const last = pos[c].get(b.start + MAX_SHOWN - 1)!;
+        const t = svg('text', { x: last[0] + 15, y: last[1] + 4, 'text-anchor': 'start', fill: '#75757d', 'font-size': 11, 'font-family': 'JetBrains Mono, monospace' });
+        t.textContent = `+${b.count - MAX_SHOWN}`;
+        gNodes.appendChild(t);
+      });
       const label = svg('text', { x: x(c), y: H - 6, 'text-anchor': 'middle', fill: '#75757d', 'font-size': 10, 'letter-spacing': 1.6, 'font-family': 'Archivo Variable, sans-serif' });
-      label.textContent = (c === 0 ? 'Entrada' : ACT_LABEL[arch.layers[c - 1].activation]).toUpperCase();
+      label.textContent = (c === 0 ? 'Entrada' : blocks.map((b) => ACT_LABEL[b.activation]).filter((v, k, a) => a.indexOf(v) === k).join(' · ')).toUpperCase();
       gNodes.appendChild(label);
     });
     this.el.append(gLines, gNodes, this.gPulses);
@@ -100,7 +134,7 @@ export class NetView {
     const pick = (layer: number, score: (i: number, j: number, w: number) => number, n: number) =>
       this.lines
         .filter((l) => l.layer === layer)
-        .map((l) => ({ l, s: score(l.i, l.j, this.weights!.camadas[layer]?.pesos[l.i]?.[l.j] ?? 0) }))
+        .map((l) => ({ l, s: score(l.i, l.j, this.weights!.camadas[layer]?.pesos[l.i]?.[l.p] ?? 0) }))
         .sort((a, b) => b.s - a.s)
         .slice(0, n);
     const norm = acts.map((a) => {
@@ -179,8 +213,8 @@ export class NetView {
   update(model: SavedModel): void {
     this.weights = model;
     const maxPerLayer = model.camadas.map((l) => Math.max(1e-9, ...l.pesos.flat().map(Math.abs)));
-    for (const { el, layer, i, j } of this.lines) {
-      const w = model.camadas[layer]?.pesos[i]?.[j] ?? 0;
+    for (const { el, layer, i, p } of this.lines) {
+      const w = model.camadas[layer]?.pesos[i]?.[p] ?? 0;
       const a = Math.abs(w) / maxPerLayer[layer];
       el.setAttribute('stroke', w >= 0 ? '#f2f2f3' : '#7d7d86');
       el.setAttribute('stroke-opacity', (0.06 + a * 0.6).toFixed(3));

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { SavedModel } from '../core/persistence';
+import { deserialize, type SavedModel } from '../core/persistence';
+import { shownUnits, topology } from './topology';
 
 /**
  * Cenas 3D do Sinapse (three.js), sempre com dados reais:
@@ -281,6 +282,7 @@ interface Edge {
   layer: number; // camada de destino (0 = primeira camada com pesos)
   i: number; // neurônio de destino
   j: number; // entrada (neurônio da camada anterior)
+  p: number; // posição do peso dentro do neurônio (difere de j quando o bloco escolhe as origens)
   a: THREE.Vector3;
   b: THREE.Vector3;
 }
@@ -335,31 +337,59 @@ export class Net3D extends Stage {
   }
 
   private build(model: SavedModel): void {
-    this.sizes = [model.entradas, ...model.camadas.map((c) => c.neuronios)];
-    this.shown = this.sizes.map((n) => Math.min(n, MAX_SHOWN));
+    const topo = topology(deserialize(model).net.architecture);
+    this.sizes = topo.sizes;
+    const units = shownUnits(topo, MAX_SHOWN);
+    this.shown = units.map((u) => u.length);
     const gapX = 3.4;
     const cols = this.sizes.length;
-    this.nodePos = this.shown.map((n, l) => {
-      const side = n > 6 ? Math.ceil(Math.sqrt(n)) : 1;
-      const rows = Math.ceil(n / side);
-      const sp = side > 1 ? 0.95 : Math.min(1.1, 5 / Math.max(1, n - 1));
-      return Array.from({ length: n }, (_, k) => {
-        const c = k % side;
-        const r = Math.floor(k / side);
-        return new THREE.Vector3((l - (cols - 1) / 2) * gapX, ((rows - 1) / 2 - r) * sp, (c - (side - 1) / 2) * sp);
+    // cada bloco é uma grade no plano y-z; blocos da mesma camada ficam empilhados em y, com um vão
+    this.nodePos = topo.blocks.map((blocks, l) => {
+      const out: THREE.Vector3[] = [];
+      const multi = blocks.length > 1;
+      const dims = blocks.map((b) => {
+        const n = Math.min(b.count, MAX_SHOWN);
+        const side = n > (multi ? 4 : 6) ? Math.ceil(Math.sqrt(n)) : 1;
+        const rows = Math.ceil(n / side);
+        const sp = side > 1 ? 0.85 : Math.min(1.1, (multi ? 3 : 5) / Math.max(1, n - 1));
+        return { n, side, rows, sp, height: (rows - 1) * sp };
       });
+      const BLOCK_GAP = 1.3;
+      const totalH = dims.reduce((a, d) => a + d.height, 0) + (blocks.length - 1) * BLOCK_GAP;
+      let y0 = totalH / 2;
+      blocks.forEach((b, k) => {
+        const d = dims[k];
+        for (let u = 0; u < d.n; u++) {
+          const c = u % d.side;
+          const r = Math.floor(u / d.side);
+          out[b.start + u] = new THREE.Vector3((l - (cols - 1) / 2) * gapX, y0 - r * d.sp, (c - (d.side - 1) / 2) * d.sp);
+        }
+        y0 -= d.height + BLOCK_GAP;
+      });
+      return out;
     });
     let count = 0;
-    this.nodeIndex = this.shown.map((n) => Array.from({ length: n }, () => count++));
-    this.glow = this.shown.map((n, l) => Array(n).fill(l === 0 ? 0.35 : 0.2));
+    this.nodeIndex = this.nodePos.map((col) => {
+      const idx: number[] = [];
+      col.forEach((_, k) => (idx[k] = count++));
+      return idx;
+    });
+    this.glow = this.sizes.map((n, l) => Array(n).fill(l === 0 ? 0.35 : 0.2));
     this.glowTarget = this.glow.map((g) => g.slice());
 
-    // ligações (uma geometria só, cor por vértice)
+    // ligações (uma geometria só, cor por vértice): só as que existem
     this.edges = [];
-    for (let l = 1; l < this.shown.length; l++)
-      for (let i = 0; i < this.shown[l]; i++)
-        for (let j = 0; j < this.shown[l - 1]; j++)
-          this.edges.push({ layer: l - 1, i, j, a: this.nodePos[l - 1][j], b: this.nodePos[l][i] });
+    for (let l = 1; l < this.sizes.length; l++)
+      for (const i of units[l]) {
+        const src = topo.sources[l - 1][i];
+        const n = src ? src.length : this.sizes[l - 1];
+        for (let p = 0; p < n; p++) {
+          const j = src ? src[p] : p;
+          const a = this.nodePos[l - 1][j];
+          if (!a) continue;
+          this.edges.push({ layer: l - 1, i, j, p, a, b: this.nodePos[l][i] });
+        }
+      }
     const pos = new Float32Array(this.edges.length * 6);
     this.edges.forEach((e, k) => {
       pos.set([e.a.x, e.a.y, e.a.z, e.b.x, e.b.y, e.b.z], k * 6);
@@ -407,8 +437,10 @@ export class Net3D extends Stage {
     this.root.add(this.backMesh);
 
     const span = (cols - 1) * gapX;
-    const tall = Math.max(...this.nodePos.flat().map((p) => Math.abs(p.y)), 1);
-    this.fitBox = { w: span / 2 + 1, h: tall + 0.8 };
+    const all = this.nodePos.flat();
+    const tall = Math.max(...all.map((p) => Math.abs(p.y)), 1);
+    const deep = Math.max(...all.map((p) => Math.abs(p.z)), 0);
+    this.fitBox = { w: Math.max(span / 2, deep) + 1, h: tall + 0.8 };
     this.fit();
     this.updateNodes();
   }
@@ -418,7 +450,7 @@ export class Net3D extends Stage {
     this.model = model;
     const maxPer = model.camadas.map((c) => Math.max(1e-9, ...c.pesos.flat().map(Math.abs)));
     this.edges.forEach((e, k) => {
-      const w = model.camadas[e.layer]?.pesos[e.i]?.[e.j] ?? 0;
+      const w = model.camadas[e.layer]?.pesos[e.i]?.[e.p] ?? 0;
       const a = Math.pow(Math.abs(w) / maxPer[e.layer], 1.4);
       this.tmpColor.copy(w >= 0 ? POS : NEG);
       this.tmpColor.lerpColors(BG, this.tmpColor, 0.1 + a * 0.85);
@@ -448,7 +480,7 @@ export class Net3D extends Stage {
       const cands = this.edges
         .filter((e) => e.layer === l)
         .map((e) => {
-          const w = Math.abs(this.model!.camadas[l].pesos[e.i]?.[e.j] ?? 0) / maxPer[l];
+          const w = Math.abs(this.model!.camadas[l].pesos[e.i]?.[e.p] ?? 0) / maxPer[l];
           return { e, s: w * (0.25 + (norm[l]?.[e.j] ?? 0)) };
         })
         .sort((x, y) => y.s - x.s)
@@ -478,7 +510,7 @@ export class Net3D extends Stage {
       const w = this.model.camadas[l];
       const cands = this.edges
         .filter((e) => e.layer === l)
-        .map((e) => ({ e, s: (Math.abs(c.deltas![l]?.[e.i] ?? 0) / maxD[l]) * Math.abs(w.pesos[e.i]?.[e.j] ?? 0) }))
+        .map((e) => ({ e, s: (Math.abs(c.deltas![l]?.[e.i] ?? 0) / maxD[l]) * Math.abs(w.pesos[e.i]?.[e.p] ?? 0) }))
         .sort((x, y) => y.s - x.s)
         .slice(0, perLayer);
       const top = Math.max(1e-12, cands[0]?.s ?? 1);
@@ -503,7 +535,7 @@ export class Net3D extends Stage {
       const el = this.time - this.wave.start;
       const hop = 0.32;
       this.wave.acts.forEach((layer, l) => {
-        if (el >= l * hop) layer.forEach((v, k) => k < this.shown[l] && (this.glowTarget[l][k] = v));
+        if (el >= l * hop) layer.forEach((v, k) => this.nodePos[l]?.[k] && (this.glowTarget[l][k] = v));
       });
       if (el > this.wave.acts.length * hop + 1.5) this.wave = null;
     }
