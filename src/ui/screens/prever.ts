@@ -44,7 +44,7 @@ export function preverScreen(): HTMLElement {
           { class: 'out-row' },
           h('div', null, h('div', null, name), expected ? h('div', { class: 'exp mono' }, `esperado ${fmt(expected[k])}`) : null),
           h('b', { class: values ? 'flash' : '', style: values ? '' : 'color:var(--t3)' }, values ? fmt(values[k]) : '—'),
-          outNames.length > 1 ? h('div', { class: 'out-bar' }, h('span', { style: `width:${values ? (Math.abs(values[k]) / max) * 100 : 0}%` })) : null,
+          outNames.length > 1 ? h('div', { class: 'out-bar' }, h('span', { style: `transform:scaleX(${values ? Math.abs(values[k]) / max : 0})` })) : null,
         ),
       ),
     );

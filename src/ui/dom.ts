@@ -81,7 +81,12 @@ export function fmt(v: number | undefined, digits = 4): string {
 export function parseNum(s: string): number {
   const t = s.trim().replace(/\s/g, '');
   if (t === '') return NaN;
-  return Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  if (t.includes(',') && t.includes('.')) {
+    // só aceita os dois juntos no formato brasileiro com milhar: 1.234,5
+    return /^-?\d{1,3}(\.\d{3})+,\d+$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : NaN;
+  }
+  if ((t.match(/,/g) ?? []).length > 1) return NaN;
+  return Number(t.replace(',', '.'));
 }
 
 export function toast(message: string, kind: 'ok' | 'err' = 'ok'): void {

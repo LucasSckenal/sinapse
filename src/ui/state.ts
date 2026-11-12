@@ -75,7 +75,9 @@ export function set(patch: Partial<State>): void {
   listeners.forEach((l) => l());
 }
 
+/** Limpa o histórico do treino. Com um treino rodando não mexe em nada: a mudança vale no próximo. */
 export function resetTraining(): Partial<State> {
+  if (state.status === 'rodando' || state.status === 'pausado') return {};
   return { status: 'parado', history: [], testMSE: undefined, splitCounts: null, trainError: '' };
 }
 

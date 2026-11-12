@@ -155,6 +155,7 @@ function splitCard(table: Table): HTMLElement {
       h('input', {
         class: 'input',
         inputmode: 'decimal',
+        'aria-label': label,
         value: String(p[key]).replace('.', ','),
         'aria-invalid': String(!!err),
         onchange: (e: Event) => {
@@ -183,6 +184,7 @@ function splitCard(table: Table): HTMLElement {
       h('input', {
         class: 'input',
         inputmode: 'numeric',
+        'aria-label': 'Semente da divisão',
         value: String(state.splitSeed),
         onchange: (e: Event) => {
           const v = Math.round(parseNum((e.target as HTMLInputElement).value));
@@ -223,6 +225,7 @@ export function dadosScreen(): HTMLElement {
         input,
       ),
     ),
+    state.status === 'rodando' || state.status === 'pausado' ? notice('Há um treino em andamento. O que mudar aqui vale no próximo treino.') : null,
     h('div', { class: 'grid2' }, columnsCard(t), splitCard(t)),
   );
 }

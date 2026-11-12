@@ -49,7 +49,8 @@ export function treinoScreen(): HTMLElement {
     testEl.textContent = fmt(state.testMSE);
     testEl.style.color = state.testMSE === undefined ? 'var(--t3)' : '';
     const p = Math.min(100, (hist.length / state.epochs) * 100);
-    bar.style.width = `${p}%`;
+    bar.style.transform = `scaleX(${p / 100})`;
+    bar.parentElement?.setAttribute('aria-valuenow', String(Math.round(p)));
     pct.textContent = `${Math.round(p)}%`;
     const epochTxt = hist.length ? ` · época ${hist.length} de ${state.epochs}` : '';
     subEl.textContent = `${state.fileName} · ${architectureText(model.net.architecture)}${epochTxt}`;
@@ -65,7 +66,7 @@ export function treinoScreen(): HTMLElement {
     chart.disconnect();
   };
 
-  const field = (label: string, value: string, apply: (v: number) => void) =>
+  const field = (label: string, value: string, apply: (v: number) => void, hint: string) =>
     h(
       'label',
       null,
@@ -73,6 +74,8 @@ export function treinoScreen(): HTMLElement {
       h('input', {
         class: 'input',
         inputmode: 'decimal',
+        'aria-label': label,
+        title: hint,
         value,
         disabled: busy,
         onchange: (e: Event) => apply(parseNum((e.target as HTMLInputElement).value)),
@@ -131,11 +134,11 @@ export function treinoScreen(): HTMLElement {
       h(
         'div',
         { class: 'inline-fields' },
-        field('Taxa', String(state.learningRate).replace('.', ','), (v) => set({ learningRate: Number.isFinite(v) ? v : state.learningRate })),
-        field('Épocas', String(state.epochs), (v) => set({ epochs: Number.isFinite(v) ? Math.round(v) : state.epochs, ...(state.status === 'fim' ? {} : resetTraining()) })),
-        field('Semente', String(state.trainSeed), (v) => set({ trainSeed: Number.isFinite(v) ? Math.round(v) : state.trainSeed })),
+        field('Taxa', String(state.learningRate).replace('.', ','), (v) => set({ learningRate: Number.isFinite(v) ? v : state.learningRate }), 'Taxa de aprendizado (η). Comum entre 0,01 e 0,5'),
+        field('Épocas', String(state.epochs), (v) => set({ epochs: Number.isFinite(v) ? Math.round(v) : state.epochs, ...(state.status === 'fim' ? {} : resetTraining()) }), 'Quantas vezes o treino passa por todos os exemplos'),
+        field('Semente', String(state.trainSeed), (v) => set({ trainSeed: Number.isFinite(v) ? Math.round(v) : state.trainSeed }), 'Semente da ordem dos exemplos a cada época'),
       ),
-      h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Progresso do treino' }, bar),
+      h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Progresso do treino', 'aria-valuemin': 0, 'aria-valuemax': 100 }, bar),
       pct,
       h('span', { style: 'font-size:13px;color:var(--t2);display:flex;align-items:center' }, h('i', { class: `status-dot ${running ? 'live' : ''}` }), statusTxt),
     ),

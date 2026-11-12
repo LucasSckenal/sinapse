@@ -157,6 +157,7 @@ export function arquiteturaScreen(): HTMLElement {
           h('input', {
             class: 'input',
             inputmode: 'numeric',
+            'aria-label': 'Semente dos pesos',
             value: String(state.initSeed),
             onchange: (e: Event) => {
               const v = Math.round(parseNum((e.target as HTMLInputElement).value));
