@@ -1,6 +1,6 @@
 import type { Model, SavedModel } from '../core/persistence';
 import { serialize } from '../core/persistence';
-import type { Net3D, Surface3D } from './net3d';
+import type { Cycle, Net3D, Surface3D } from './net3d';
 import { NetView } from './netview';
 
 /**
@@ -20,7 +20,17 @@ export function activationsOf(model: Model): number[][] {
 export interface NetHandle {
   setWeights(m: SavedModel): void;
   wave(acts: number[][], strong?: boolean): void;
+  cycle(c: Cycle, strong?: boolean): void;
   dispose(): void;
+}
+
+/** Ativações e deltas de um exemplo, calculados na cópia da rede (os pesos não mudam). */
+export function cycleOf(model: Model, x: readonly number[], t?: readonly number[]): Cycle {
+  model.net.forward(x);
+  const acts = activationsOf(model);
+  if (!t) return { acts };
+  model.net.backward(t);
+  return { acts, deltas: model.net.layers.map((l) => l.neurons.map((n) => n.delta)) };
 }
 
 export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: number; layers: { neurons: number; activation: string }[] }): NetHandle {
@@ -51,6 +61,11 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
     },
     wave(acts, strong) {
       net3d?.wavePass(acts, strong);
+      flat?.cycle(acts);
+    },
+    cycle(c, strong) {
+      net3d?.cycle(c, strong);
+      flat?.cycle(c.acts, c.deltas);
     },
     dispose() {
       disposed = true;

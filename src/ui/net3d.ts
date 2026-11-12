@@ -290,6 +290,16 @@ interface Pulse {
   t: number;
   delay: number;
   strength: number;
+  /** true = o erro voltando (retropropagação), da camada da frente para a de trás. */
+  back?: boolean;
+}
+
+/** Um ciclo de aprendizado de um exemplo: ativações (ida) e deltas (volta). */
+export interface Cycle {
+  /** acts[l][k]: saída do neurônio k da camada l (camada 0 = entradas). */
+  acts: number[][];
+  /** deltas[l][i]: δ do neurônio i da camada l+1 (só camadas com pesos). */
+  deltas?: number[][];
 }
 
 /** A rede em 3D. */
@@ -300,6 +310,10 @@ export class Net3D extends Stage {
   private nodes!: THREE.InstancedMesh;
   private halos!: THREE.InstancedMesh;
   private pulseGlow!: THREE.InstancedMesh;
+  private backMesh!: THREE.InstancedMesh;
+  /** Brilho extra das ligações quando os pesos acabam de ser atualizados. */
+  private flash = 0;
+  private flashAt = -1;
   private nodeIndex: number[][] = [];
   private edges: Edge[] = [];
   private lines!: THREE.LineSegments;
@@ -383,6 +397,14 @@ export class Net3D extends Stage {
     );
     this.pulseGlow.count = 0;
     this.root.add(this.pulseGlow);
+    // erro voltando: pulsos menores e mais escuros
+    this.backMesh = new THREE.InstancedMesh(
+      new THREE.OctahedronGeometry(0.07, 0),
+      new THREE.MeshBasicMaterial({ color: 0x8c8c96, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
+      600,
+    );
+    this.backMesh.count = 0;
+    this.root.add(this.backMesh);
 
     const span = (cols - 1) * gapX;
     const tall = Math.max(...this.nodePos.flat().map((p) => Math.abs(p.y)), 1);
@@ -432,13 +454,50 @@ export class Net3D extends Stage {
         .sort((x, y) => y.s - x.s)
         .slice(0, perLayer);
       for (const { e, s } of cands) {
-        if (this.pulses.length >= 600) break;
+        if (this.pulses.length >= 1100) break;
         this.pulses.push({ edge: e, t: 0, delay: l * hop + Math.random() * 0.06, strength: Math.min(1, 0.35 + s) });
       }
     }
   }
 
+  /**
+   * O ciclo inteiro de um exemplo: a ida acende a rede camada a camada; se vierem os deltas,
+   * o erro volta da saída para a entrada; no fim as ligações piscam (os pesos foram atualizados).
+   */
+  cycle(c: Cycle, strong = false): void {
+    this.wavePass(c.acts, strong);
+    if (!c.deltas || !this.model) return;
+    const hop = strong ? 0.42 : 0.3;
+    const L = this.shown.length - 1; // camadas com pesos
+    const forwardTime = L * hop + 0.35;
+    const maxD = c.deltas.map((d) => Math.max(1e-12, ...d.map(Math.abs)));
+    const budget = strong ? 360 : 140;
+    const perLayer = Math.max(6, Math.floor(budget / Math.max(1, L)));
+    for (let l = L - 1; l >= 0; l--) {
+      const step = L - 1 - l; // a última camada volta primeiro
+      const w = this.model.camadas[l];
+      const cands = this.edges
+        .filter((e) => e.layer === l)
+        .map((e) => ({ e, s: (Math.abs(c.deltas![l]?.[e.i] ?? 0) / maxD[l]) * Math.abs(w.pesos[e.i]?.[e.j] ?? 0) }))
+        .sort((x, y) => y.s - x.s)
+        .slice(0, perLayer);
+      const top = Math.max(1e-12, cands[0]?.s ?? 1);
+      for (const { e, s } of cands) {
+        if (this.pulses.length >= 1100) break;
+        this.pulses.push({ edge: e, t: 0, delay: forwardTime + step * hop + Math.random() * 0.06, strength: Math.min(1, 0.25 + s / top), back: true });
+      }
+    }
+    this.flashAt = this.time + forwardTime + L * hop + 0.2;
+  }
+
   protected tick(dt: number): void {
+    // pisca as ligações quando o erro termina de voltar (pesos atualizados)
+    if (this.flashAt >= 0 && this.time >= this.flashAt) {
+      this.flash = 1;
+      this.flashAt = -1;
+    }
+    this.flash = Math.max(0, this.flash - dt * 2.2);
+    (this.lines.material as THREE.LineBasicMaterial).color.setScalar(1 + this.flash * 1.6);
     // acende cada camada quando a onda chega nela
     if (this.wave) {
       const el = this.time - this.wave.start;
@@ -454,6 +513,7 @@ export class Net3D extends Stage {
 
     // pulsos andando pelas ligações
     let n = 0;
+    let nb = 0;
     const speed = 3.2;
     this.pulses = this.pulses.filter((p) => {
       if (p.delay > 0) {
@@ -462,17 +522,30 @@ export class Net3D extends Stage {
       }
       p.t += dt * speed;
       if (p.t >= 1) return false;
+      if (p.back) {
+        this.dummy.position.lerpVectors(p.edge.b, p.edge.a, p.t);
+        this.dummy.rotation.set(this.time * 3, this.time * 2, 0);
+        this.dummy.scale.setScalar((0.5 + p.strength * 0.9) * Math.sin(Math.PI * p.t) + 0.15);
+        this.dummy.updateMatrix();
+        this.dummy.rotation.set(0, 0, 0);
+        if (nb < 600) this.backMesh.setMatrixAt(nb++, this.dummy.matrix);
+        return true;
+      }
       this.dummy.position.lerpVectors(p.edge.a, p.edge.b, p.t);
       this.dummy.scale.setScalar((0.6 + p.strength * 0.8) * Math.sin(Math.PI * p.t) + 0.2);
       this.dummy.updateMatrix();
-      this.pulseMesh.setMatrixAt(n, this.dummy.matrix);
-      this.pulseGlow.setMatrixAt(n++, this.dummy.matrix);
+      if (n < 600) {
+        this.pulseMesh.setMatrixAt(n, this.dummy.matrix);
+        this.pulseGlow.setMatrixAt(n++, this.dummy.matrix);
+      }
       return true;
     });
     this.pulseMesh.count = n;
     this.pulseGlow.count = n;
+    this.backMesh.count = nb;
     this.pulseMesh.instanceMatrix.needsUpdate = true;
     this.pulseGlow.instanceMatrix.needsUpdate = true;
+    this.backMesh.instanceMatrix.needsUpdate = true;
   }
 
   private updateNodes(): void {

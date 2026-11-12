@@ -2,7 +2,8 @@ import { deserialize, serialize, type SavedModel } from '../../core/persistence'
 import { Boundary, boundaryKind } from '../boundary';
 import { MseChart } from '../chart';
 import { fmt, h, icon, notice, parseNum, segmented } from '../dom';
-import { activationsOf, mountNet, mountSurface, type NetHandle, type SurfaceHandle } from '../net3d-mount';
+import { cycleOf, mountNet, mountSurface, type NetHandle, type SurfaceHandle } from '../net3d-mount';
+import { NetView } from '../netview';
 import { architectureText, resetTraining, set, state } from '../state';
 import { currentSplit, onProgress, pauseTraining, requestSurface, resumeTraining, startTraining, stopTraining, trainBlockers } from '../training';
 
@@ -15,7 +16,17 @@ function emptyState(title: string, text: string, action: string, go: () => void)
   );
 }
 
-type View = 'rede' | 'superficie';
+type View = 'rede' | 'plano' | 'superficie';
+
+const VIEW_KEY = 'sinapse.vista';
+function savedView(): View {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === 'plano' || v === 'superficie' ? v : 'rede';
+  } catch {
+    return 'rede';
+  }
+}
 
 /**
  * As cenas 3D e a fronteira sobrevivem aos redesenhos da tela (mudar a taxa, pausar...):
@@ -24,6 +35,8 @@ type View = 'rede' | 'superficie';
 interface Visuals {
   key: string;
   netHost: HTMLElement;
+  flatHost: HTMLElement;
+  flat: NetView;
   net: NetHandle;
   surfHost: HTMLElement;
   surf: SurfaceHandle | null;
@@ -41,7 +54,10 @@ function visualsFor(saved: SavedModel, arch: ReturnType<typeof deserialize>['net
   const surfHost = h('div', { class: 'stage-host', hidden: true });
   const surfMsg = h('p', { class: 'stage-msg' });
   surfHost.appendChild(surfMsg);
-  vis = { key, netHost, net: mountNet(netHost, saved, arch), surfHost, surf: null, surfMsg, boundary: new Boundary(), view: 'rede' };
+  const flatHost = h('div', { class: 'stage-host flat-host', hidden: true });
+  const flat = new NetView(arch, saved);
+  flatHost.appendChild(flat.el);
+  vis = { key, netHost, flatHost, flat, net: mountNet(netHost, saved, arch), surfHost, surf: null, surfMsg, boundary: new Boundary(), view: savedView() };
   return vis;
 }
 
@@ -73,6 +89,7 @@ export function treinoScreen(): HTMLElement {
   const arch = model.net.architecture;
   const v = visualsFor(serialize(model), arch);
   v.net.setWeights(serialize(model));
+  v.flat.update(serialize(model));
 
   const chart = new MseChart();
   const trainEl = h('b', { class: 'mono' });
@@ -96,17 +113,19 @@ export function treinoScreen(): HTMLElement {
     v.boundary.draw(liveModel, state.table, state.selection.inputs, state.selection.outputs);
   };
 
-  // onda de um exemplo de treino passando pela rede 3D
+  // um exemplo de treino fazendo o ciclo inteiro: ida, erro voltando, pesos atualizados
   let lastWave = 0;
   const waveFrom = (m: typeof model) => {
     const tr = currentSplit?.treino;
     if (!tr || tr.inputs.length === 0) return;
     const now = performance.now();
-    if (now - lastWave < 650) return;
+    if (now - lastWave < 1900) return;
     lastWave = now;
     try {
-      m.net.forward(tr.inputs[Math.floor(Math.random() * tr.inputs.length)]);
-      v.net.wave(activationsOf(m));
+      const k = Math.floor(Math.random() * tr.inputs.length);
+      const c = cycleOf(m, tr.inputs[k], tr.targets[k]);
+      if (v.view === 'plano') v.flat.cycle(c.acts, c.deltas);
+      else v.net.cycle(c);
     } catch {
       /* arquitetura mudou no meio: ignora */
     }
@@ -161,6 +180,7 @@ export function treinoScreen(): HTMLElement {
   const off = onProgress((snap) => {
     if (snap) {
       v.net.setWeights(snap);
+      v.flat.update(snap);
       try {
         liveModel = deserialize(snap);
         waveFrom(liveModel);
@@ -202,34 +222,49 @@ export function treinoScreen(): HTMLElement {
   const statusTxt = { parado: 'Pronto', rodando: 'Treinando', pausado: 'Pausado', fim: 'Concluído', erro: 'Erro' }[st];
   const counts = state.splitCounts;
 
+  const titleOf = (view: View) => (view === 'superficie' ? 'Superfície do erro' : 'Rede');
+  const showView = (view: View) => {
+    v.netHost.hidden = view !== 'rede';
+    v.flatHost.hidden = view !== 'plano';
+    v.surfHost.hidden = view !== 'superficie';
+  };
   const setView = (view: View) => {
     v.view = view;
-    v.netHost.hidden = view !== 'rede';
-    v.surfHost.hidden = view !== 'superficie';
-    stageLabel.textContent = view === 'rede' ? 'Rede' : 'Superfície do erro';
-    legend.replaceChildren(...legendFor(view));
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      /* sem armazenamento: só não lembra */
+    }
+    showView(view);
+    stageLabel.textContent = titleOf(view);
+    legend.replaceChildren(...legendFor(view).filter((x): x is HTMLSpanElement => !!x));
     seg.replaceWith((seg = makeSeg()));
     if (view === 'superficie') refreshSurface(serialize(liveModel), true);
   };
   const makeSeg = () =>
     segmented<View>(
       [
-        { value: 'rede', label: 'Rede' },
+        { value: 'rede', label: '3D' },
+        { value: 'plano', label: '2D' },
         { value: 'superficie', label: 'Superfície do erro' },
       ],
       v.view,
       setView,
-      { label: 'Vista 3D' },
+      { label: 'Vista da rede' },
     );
   let seg = makeSeg();
-  const stageLabel = h('span', { class: 'lbl wide' }, v.view === 'rede' ? 'Rede' : 'Superfície do erro');
+  const stageLabel = h('span', { class: 'lbl wide' }, titleOf(v.view));
   const legendFor = (view: View) =>
-    view === 'rede'
-      ? [h('span', null, h('i', { class: 'lg-pos' }), 'peso positivo'), h('span', null, h('i', { class: 'lg-neg' }), 'negativo'), h('span', null, 'brilho = ativação'), h('span', { class: 'hint-drag' }, 'arraste: girar · botão direito: mover · roda: zoom')]
+    view !== 'superficie'
+      ? [
+          h('span', null, h('i', { class: 'lg-pos' }), 'ida: ativação'),
+          h('span', null, h('i', { class: 'lg-neg' }), 'volta: erro (δ)'),
+          h('span', null, 'piscar = pesos atualizados'),
+          view === 'rede' ? h('span', { class: 'hint-drag' }, 'arraste: girar · botão direito: mover · roda: zoom') : null,
+        ]
       : [h('span', null, 'MSE do treino variando w₁ e w₂; os outros pesos como estão agora'), h('span', null, h('i', { class: 'lg-pos' }), 'caminho do treino')];
   const legend = h('div', { class: 'legend3d' }, ...legendFor(v.view));
-  v.netHost.hidden = v.view !== 'rede';
-  v.surfHost.hidden = v.view !== 'superficie';
+  showView(v.view);
 
   const boundaryCard = kind
     ? h(
@@ -260,7 +295,7 @@ export function treinoScreen(): HTMLElement {
     h(
       'div',
       { class: 'train-grid' },
-      h('section', { class: 'card stage-card' }, h('div', { class: 'card-head' }, stageLabel, seg), v.netHost, v.surfHost, legend),
+      h('section', { class: 'card stage-card' }, h('div', { class: 'card-head' }, stageLabel, seg), v.netHost, v.flatHost, v.surfHost, legend),
       h(
         'div',
         { class: 'train-side' },

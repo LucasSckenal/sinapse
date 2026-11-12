@@ -3,6 +3,7 @@ import { NORMALIZATION_LABELS, type NormalizationName } from '../../core/normali
 import { fmt, h, icon, notice, parseNum, segmented, toast } from '../dom';
 import { resetTraining, set, state } from '../state';
 import { syncArchWithData } from './arquitetura';
+import { xorDemo } from '../demo';
 
 const EXAMPLES = [
   { file: 'xor.csv', label: 'XOR' },
@@ -79,6 +80,7 @@ function dropZone(): HTMLElement {
       },
     },
     h('div', null, h('div', { class: 'big wide' }, 'Solte um CSV'), h('div', { style: 'margin-top:12px' }, hint)),
+    xorDemo(),
     h(
       'div',
       { style: 'display:grid;gap:12px;justify-items:center' },

@@ -12,7 +12,14 @@ await page.setViewport({ width: +largura, height: +altura, deviceScaleFactor: 1 
 const erros = [];
 page.on('pageerror', (e) => erros.push(e.message));
 page.on('console', (m) => m.type() === 'error' && erros.push(m.text()));
-await page.goto('http://localhost:5191', { waitUntil: 'networkidle0' });
+await page.goto(process.env.URL ?? 'http://localhost:5191', { waitUntil: 'networkidle0' });
+if (vista === 'inicio') {
+  await new Promise((r) => setTimeout(r, Number(process.env.ESPERA ?? 7000)));
+  await page.screenshot({ path: saida });
+  console.log(JSON.stringify({ erros, legenda: await page.evaluate(() => document.querySelector('.demo-caption')?.textContent) }));
+  await browser.close();
+  process.exit(0);
+}
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = async (t, s = 'main') => {
   await page.evaluate((t, s) => [...document.querySelectorAll(`${s} button`)].find((b) => b.textContent.trim() === t).click(), t, s);
@@ -32,7 +39,9 @@ await page.evaluate(() => {
 await wait(300);
 await click('Treinar');
 if (vista === 'superficie') await click('Superfície do erro');
-await wait(vista === 'superficie' ? 5000 : 3000);
+if (vista === 'plano') await click('2D');
+if (vista === 'rede') await click('3D');
+await wait(vista === 'superficie' ? 5000 : Number(process.env.ESPERA ?? 3000));
 if (process.env.INTERAGIR) {
   // gira, move com o botão direito, aproxima com a roda e usa o botão "+"
   const box = await page.evaluate(() => {
