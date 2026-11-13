@@ -26,7 +26,7 @@ export interface WeightRef {
 
 export type FromWorker =
   | { type: 'epochs'; results: EpochResult[]; snapshot?: SavedModel }
-  | { type: 'done'; model: SavedModel; testMSE: number; testAccuracy?: number; stopped: boolean }
+  | { type: 'done'; model: SavedModel; testMSE: number; testAccuracy?: number; stopped: boolean; earlyStopped: boolean; bestEpoch: number; restored: boolean }
   | { type: 'error'; message: string }
   | { type: 'surface'; id: number; z: number[][] };
 
@@ -49,10 +49,12 @@ let lastSnapshot = 0;
 
 function finish(): void {
   if (!trainer || !split) return;
+  // com a parada antecipada ligada, a rede volta para a melhor época da validação
+  const restored = (trainer.options.patience ?? 0) > 0 ? trainer.restoreBest() : false;
   const testMSE = mse(trainer.net, split.teste.inputs, split.teste.targets);
   const testAccuracy = acc(split.teste);
   const model = serialize({ net: trainer.net, normalization, columns, codings });
-  ctx.postMessage({ type: 'done', model, testMSE, testAccuracy, stopped } satisfies FromWorker);
+  ctx.postMessage({ type: 'done', model, testMSE, testAccuracy, stopped, earlyStopped: trainer.stoppedEarly, bestEpoch: trainer.bestEpoch, restored } satisfies FromWorker);
   lastNet = trainer.net;
   trainer = null;
 }

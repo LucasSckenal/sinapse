@@ -3,7 +3,32 @@ import { deserialize, serialize, type SavedModel } from '../core/persistence';
 import { validateTrainOptions } from '../core/trainer';
 import type { FromWorker, ToWorker, WeightRef } from '../train.worker';
 import { toast } from './dom';
-import { set, state } from './state';
+import { NORMALIZATION_LABELS } from '../core/normalization';
+import { architectureText, saveRuns, set, state, type Run } from './state';
+
+/** Resumo desta execução para o histórico (usa o estado do treino que acabou de terminar). */
+function makeRun(testMSE: number, acerto: number | undefined, bestEpoch: number): Run {
+  const h = state.history;
+  const at = bestEpoch > 0 ? h[bestEpoch - 1] : h[h.length - 1];
+  const step = Math.max(1, Math.floor(h.length / 60));
+  return {
+    id: Date.now(),
+    quando: new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+    arquivo: state.fileName,
+    arquitetura: state.model ? architectureText(state.model.net.architecture) : '',
+    taxa: state.learningRate,
+    epocas: state.epochs,
+    feitas: h.length,
+    melhorEpoca: bestEpoch,
+    normalizacao: NORMALIZATION_LABELS[state.normalization],
+    divisao: `${state.percent.treino}/${state.percent.validacao}/${state.percent.teste}`,
+    treino: at?.trainMSE ?? NaN,
+    validacao: at?.valMSE ?? NaN,
+    teste: testMSE,
+    acerto,
+    curva: h.filter((_, i) => i % step === 0).map((r) => r.valMSE),
+  };
+}
 
 /** Liga a tela ao worker de treino. */
 let worker: Worker | null = null;
@@ -108,9 +133,19 @@ function getWorker(): Worker {
     } else if (msg.type === 'done') {
       const model = deserialize(msg.model);
       recordTrack(msg.model);
-      set({ model, modelTrained: true, status: 'fim', testMSE: msg.testMSE, testAccuracy: msg.testAccuracy });
+      const runs = [makeRun(msg.testMSE, msg.testAccuracy, msg.bestEpoch), ...state.runs].slice(0, 30);
+      saveRuns(runs);
+      set({ model, modelTrained: true, status: 'fim', testMSE: msg.testMSE, testAccuracy: msg.testAccuracy, bestEpoch: msg.bestEpoch, earlyStopped: msg.earlyStopped, runs });
       progressListeners.forEach((l) => l(msg.model));
-      toast(msg.stopped ? 'Treino parado. A rede ficou com os pesos atuais.' : 'Treino concluído');
+      toast(
+        msg.earlyStopped
+          ? `Parada antecipada na época ${state.history.length}: a rede voltou à época ${msg.bestEpoch}, a melhor na validação.`
+          : msg.restored
+            ? `Treino concluído. A rede ficou com a época ${msg.bestEpoch}, a melhor na validação.`
+            : msg.stopped
+              ? 'Treino parado. A rede ficou com os pesos atuais.'
+              : 'Treino concluído',
+      );
     } else if (msg.type === 'error') {
       set({ status: 'erro', trainError: msg.message });
     }
@@ -158,7 +193,7 @@ export function startTraining(): void {
     track = [];
     recordTrack(model);
     getWorker();
-    post({ type: 'start', model, split, options: { learningRate: state.learningRate, epochs: state.epochs, seed: state.trainSeed } });
+    post({ type: 'start', model, split, options: { learningRate: state.learningRate, epochs: state.epochs, seed: state.trainSeed, patience: state.patience } });
   } catch (e) {
     set({ status: 'erro', trainError: (e as Error).message });
   }
@@ -176,4 +211,98 @@ export function resumeTraining(): void {
 
 export function stopTraining(): void {
   post({ type: 'stop' });
+}
+
+/** Um passo do SGD feito à mão: o que aconteceu com um exemplo. */
+export interface StepResult {
+  index: number;
+  x: number[];
+  t: number[];
+  o: number[];
+  erro: number;
+  /** por camada de pesos: z, saída e δ de cada neurônio */
+  layers: { z: number[]; out: number[]; delta: number[]; activation: string[] }[];
+  /** maiores mudanças de peso: camada, neurônio, entrada, antes, depois */
+  changes: { layer: number; i: number; j: number; before: number; after: number }[];
+  biasChanges: { layer: number; i: number; before: number; after: number }[];
+  acts: number[][];
+  deltas: number[][];
+}
+
+let stepOrder: number[] = [];
+let stepPos = 0;
+
+/**
+ * Prepara a divisão (e a normalização) como o treino faria, sem treinar. A rede passa a usar
+ * a normalização do treino. Devolve o erro, se houver.
+ */
+export function ensureSplit(): string | null {
+  if (currentSplit) return null;
+  const blockers = trainBlockers();
+  if (blockers.length || !state.model || !state.table) return blockers[0] ?? 'Sem rede ou sem dados.';
+  try {
+    const split = splitDataset(selectColumns(state.table, state.selection), state.percent, state.splitSeed, state.normalization);
+    currentSplit = split;
+    state.model.normalization = split.normalizacao;
+    Object.assign(state.model, modelMeta(state.table, state.selection));
+    state.splitCounts = [split.treino.inputs.length, split.validacao.inputs.length, split.teste.inputs.length];
+    stepOrder = [];
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
+/** Faz um passo do SGD com o próximo exemplo do treino e devolve todos os números. Muda os pesos de verdade. */
+export function stepOnce(): StepResult | string {
+  const err = ensureSplit();
+  if (err) return err;
+  const net = state.model!.net;
+  const tr = currentSplit!.treino;
+  if (stepPos >= stepOrder.length) {
+    // nova "época" do passo a passo: ordem embaralhada como no SGD
+    stepOrder = tr.inputs.map((_, i) => i);
+    for (let i = stepOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [stepOrder[i], stepOrder[j]] = [stepOrder[j], stepOrder[i]];
+    }
+    stepPos = 0;
+  }
+  const k = stepOrder[stepPos++];
+  const x = tr.inputs[k];
+  const t = tr.targets[k];
+  const before = net.layers.map((l) => l.neurons.map((n) => ({ w: n.weights.slice(), b: n.bias })));
+  const o = net.forward(x);
+  net.backward(t);
+  const layers = net.layers.map((l) => ({
+    z: l.neurons.map((n) => n.z),
+    out: l.neurons.map((n) => n.output),
+    delta: l.neurons.map((n) => n.delta),
+    activation: l.neurons.map((n) => n.activation.label),
+  }));
+  const acts = [x.slice(), ...net.layers.map((l) => l.outputs())];
+  const deltas = net.layers.map((l) => l.neurons.map((n) => n.delta));
+  net.update(state.learningRate);
+  const changes: StepResult['changes'] = [];
+  const biasChanges: StepResult['biasChanges'] = [];
+  net.layers.forEach((l, li) =>
+    l.neurons.forEach((n, i) => {
+      n.weights.forEach((w, p) => changes.push({ layer: li, i, j: n.sourceOf(p), before: before[li][i].w[p], after: w }));
+      biasChanges.push({ layer: li, i, before: before[li][i].b, after: n.bias });
+    }),
+  );
+  changes.sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before));
+  biasChanges.sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before));
+  return {
+    index: k,
+    x: x.slice(),
+    t: t.slice(),
+    o,
+    erro: 0.5 * o.reduce((s2, v, i) => s2 + (v - t[i]) ** 2, 0),
+    layers,
+    changes: changes.slice(0, 6),
+    biasChanges: biasChanges.slice(0, 3),
+    acts,
+    deltas,
+  };
 }

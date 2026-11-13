@@ -141,6 +141,13 @@ abstract class Stage {
       }
       this.idleSince = performance.now();
     };
+    let downAt = { x: 0, y: 0 };
+    c.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }));
+    c.addEventListener('click', (e) => {
+      if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return; // foi arrasto, não clique
+      const r = c.getBoundingClientRect();
+      this.clicked(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
+    });
     c.addEventListener('pointerup', up);
     c.addEventListener('pointercancel', up);
     c.addEventListener(
@@ -214,6 +221,9 @@ abstract class Stage {
     this.userZoom = false;
     this.fit();
   }
+
+  /** Coordenadas do clique em [-1, 1], para o filho achar o que foi clicado. */
+  protected clicked(_x: number, _y: number): void {}
 
   private onVis = () => {
     if (!document.hidden) this.loop();
@@ -327,6 +337,9 @@ export class Net3D extends Stage {
   private flash = 0;
   private flashAt = -1;
   private nodeIndex: number[][] = [];
+  /** Chamado quando a pessoa clica num neurônio: camada (0 = entradas) e índice. */
+  onPick: ((layer: number, unit: number) => void) | null = null;
+  private raycaster = new THREE.Raycaster();
   private edges: Edge[] = [];
   private lines!: THREE.LineSegments;
   private lineColors!: Float32Array;
@@ -538,6 +551,33 @@ export class Net3D extends Stage {
     if (flash) this.flashAt = this.time + forwardTime + L * hop + 0.2;
   }
 
+  protected clicked(x: number, y: number): void {
+    if (!this.onPick) return;
+    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    const hit = this.raycaster.intersectObject(this.nodes, false)[0];
+    if (hit?.instanceId === undefined) return;
+    for (let l = 0; l < this.nodeIndex.length; l++) {
+      const k = this.nodeIndex[l].indexOf(hit.instanceId);
+      if (k >= 0) {
+        this.highlight(l, k);
+        this.onPick(l, k);
+        return;
+      }
+    }
+  }
+
+  private ring: THREE.Mesh | null = null;
+  /** Anel em volta do neurônio escolhido. */
+  highlight(l: number, k: number): void {
+    const p = this.nodePos[l]?.[k];
+    if (!p) return;
+    if (!this.ring) {
+      this.ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.025, 8, 40), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      this.root.add(this.ring);
+    }
+    this.ring.position.copy(p);
+  }
+
   /** Rótulos de cada camada (e letra de cada bloco), presos à cena e reprojetados a cada quadro. */
   private labels: { el: HTMLElement; at: THREE.Vector3 }[] = [];
   private buildLabels(topo: ReturnType<typeof topology>, cols: number, gapX: number): void {
@@ -585,6 +625,7 @@ export class Net3D extends Stage {
 
   protected tick(dt: number): void {
     this.placeLabels();
+    if (this.ring) this.ring.quaternion.copy(this.camera.quaternion);
     // pisca as ligações quando o erro termina de voltar (pesos atualizados)
     if (this.flashAt >= 0 && this.time >= this.flashAt) {
       this.flash = 1;

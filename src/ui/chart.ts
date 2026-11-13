@@ -14,8 +14,11 @@ export class MseChart {
     this.ro.observe(this.el);
   }
 
-  update(history: EpochResult[], totalEpochs: number): void {
+  private best = 0;
+
+  update(history: EpochResult[], totalEpochs: number, bestEpoch = 0): void {
     this.history = history;
+    this.best = bestEpoch;
     this.total = Math.max(totalEpochs, history.length, 1);
     this.draw();
   }
@@ -76,5 +79,13 @@ export class MseChart {
     this.el.appendChild(svg('path', { d: path('trainMSE'), fill: 'none', stroke: '#f2f2f3', 'stroke-width': 1.75, 'stroke-linejoin': 'round' }));
     const last = this.history[this.history.length - 1];
     this.el.appendChild(svg('circle', { cx: x(last.epoch), cy: y(last.trainMSE), r: 3.5, fill: '#f2f2f3' }));
+    if (this.best > 0) {
+      // melhor época da validação (onde a parada antecipada deixou os pesos)
+      const bx = x(this.best);
+      this.el.appendChild(svg('line', { x1: bx, x2: bx, y1: 8, y2: h - padB, stroke: '#f2f2f3', 'stroke-opacity': 0.35, 'stroke-dasharray': '2 4' }));
+      const t = svg('text', { x: bx + 6, y: 18, fill: '#f2f2f3', 'font-size': 10, 'font-family': 'JetBrains Mono, monospace' });
+      t.textContent = `melhor: ${this.best}`;
+      this.el.appendChild(t);
+    }
   }
 }

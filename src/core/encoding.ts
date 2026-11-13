@@ -106,3 +106,46 @@ export function accuracy(
     }
   return hits / total;
 }
+
+export interface Confusion {
+  labels: string[];
+  /** m[real][previsto] = quantos exemplos. */
+  m: number[][];
+}
+
+/**
+ * Matriz de confusão da primeira saída de classificação: coluna de rótulos (classe de maior valor),
+ * uma saída 0/1 (corte em 0,5) ou várias saídas 0/1 (a de maior valor). undefined = regressão.
+ */
+export function confusionMatrix(
+  outputs: readonly number[][],
+  targets: readonly number[][],
+  codings: readonly ColumnCoding[] | undefined,
+  outNames?: readonly string[],
+): Confusion | undefined {
+  if (outputs.length === 0) return undefined;
+  let start = 0;
+  let labels: string[];
+  if (codings && codings.some((c) => c.tipo === 'classe')) {
+    let p = 0;
+    const c = codings.find((x) => {
+      if (x.tipo === 'classe') return true;
+      p += codingWidth(x);
+      return false;
+    }) as Extract<ColumnCoding, { tipo: 'classe' }>;
+    start = p;
+    labels = c.classes;
+  } else {
+    if (!targets.every((t) => t.every((v) => v === 0 || v === 1))) return undefined;
+    const w = targets[0].length;
+    labels = w === 1 ? ['1', '0'] : Array.from({ length: w }, (_, k) => outNames?.[k] ?? `saída ${k + 1}`);
+  }
+  const width = labels.length === 2 && targets[0].length === 1 ? 1 : labels.length;
+  const idx = (v: readonly number[]) => {
+    const part = v.slice(start, start + width);
+    return width === 1 ? (part[0] >= 0.5 ? 0 : 1) : argmax(part);
+  };
+  const m = labels.map(() => labels.map(() => 0));
+  outputs.forEach((o, i) => m[idx(targets[i])][idx(o)]++);
+  return { labels, m };
+}

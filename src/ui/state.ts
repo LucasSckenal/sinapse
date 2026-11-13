@@ -9,6 +9,44 @@ export type ScreenName = 'dados' | 'arquitetura' | 'treino' | 'prever';
 
 export type TrainStatus = 'parado' | 'rodando' | 'pausado' | 'fim' | 'erro';
 
+/** Uma execução de treino, guardada para comparar. */
+export interface Run {
+  id: number;
+  quando: string;
+  arquivo: string;
+  arquitetura: string;
+  taxa: number;
+  epocas: number;
+  feitas: number;
+  melhorEpoca: number;
+  normalizacao: string;
+  divisao: string;
+  treino: number;
+  validacao: number;
+  teste: number;
+  acerto?: number;
+  /** MSE da validação ao longo das épocas (reduzido), para o desenho pequeno. */
+  curva: number[];
+}
+
+const RUNS_KEY = 'sinapse.execucoes';
+function loadRuns(): Run[] {
+  try {
+    const raw = localStorage.getItem(RUNS_KEY);
+    const list = raw ? (JSON.parse(raw) as Run[]) : [];
+    return Array.isArray(list) ? list.slice(0, 30) : [];
+  } catch {
+    return [];
+  }
+}
+export function saveRuns(runs: Run[]): void {
+  try {
+    localStorage.setItem(RUNS_KEY, JSON.stringify(runs.slice(0, 30)));
+  } catch {
+    /* sem armazenamento: o histórico vale só nesta aba */
+  }
+}
+
 export interface State {
   screen: ScreenName;
   // dados
@@ -33,6 +71,12 @@ export interface State {
   history: EpochResult[];
   testMSE: number | undefined;
   testAccuracy: number | undefined;
+  /** Parada antecipada: épocas sem melhorar na validação antes de parar (0 = desligada). */
+  patience: number;
+  bestEpoch: number;
+  earlyStopped: boolean;
+  /** Execuções anteriores, para comparar. */
+  runs: Run[];
   splitCounts: [number, number, number] | null;
   trainError: string;
 }
@@ -59,6 +103,10 @@ export const state: State = {
   history: [],
   testMSE: undefined,
   testAccuracy: undefined,
+  patience: 0,
+  bestEpoch: 0,
+  earlyStopped: false,
+  runs: loadRuns(),
   splitCounts: null,
   trainError: '',
 };
@@ -80,7 +128,7 @@ export function set(patch: Partial<State>): void {
 /** Limpa o histórico do treino. Com um treino rodando não mexe em nada: a mudança vale no próximo. */
 export function resetTraining(): Partial<State> {
   if (state.status === 'rodando' || state.status === 'pausado') return {};
-  return { status: 'parado', history: [], testMSE: undefined, testAccuracy: undefined, splitCounts: null, trainError: '' };
+  return { status: 'parado', history: [], testMSE: undefined, testAccuracy: undefined, bestEpoch: 0, earlyStopped: false, splitCounts: null, trainError: '' };
 }
 
 export function architectureText(arch: Architecture): string {

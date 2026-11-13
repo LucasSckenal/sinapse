@@ -38,6 +38,8 @@ export class NetView {
   private flash = 0;
   private clock = 0;
   private weights: SavedModel | null = null;
+  onPick: ((layer: number, unit: number) => void) | null = null;
+  private ring: SVGElement | null = null;
 
   constructor(arch: Architecture, model?: SavedModel | null) {
     this.el = svg('svg', { class: 'netview', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Rede com ${arch.inputs} entradas e ${arch.layers.length} camadas` });
@@ -107,6 +109,17 @@ export class NetView {
         const dot = svg('circle', { cx, cy, r: 3, fill: '#f2f2f3', 'fill-opacity': c === 0 ? 0.35 : 0.5 });
         gNodes.appendChild(dot);
         this.nodeDots[c][i] = dot;
+        const hit = svg('circle', { cx, cy, r: 13, fill: 'transparent', class: 'pick' });
+        hit.addEventListener('click', () => {
+          if (!this.ring) {
+            this.ring = svg('circle', { r: 14, fill: 'none', stroke: '#f2f2f3', 'stroke-width': 1.5 });
+            this.el.appendChild(this.ring);
+          }
+          this.ring.setAttribute('cx', String(cx));
+          this.ring.setAttribute('cy', String(cy));
+          this.onPick?.(c, i);
+        });
+        gNodes.appendChild(hit);
         if (c > 0) this.biasDots.push({ el: dot, layer: c - 1, i });
       }
       blocks.forEach((b) => {

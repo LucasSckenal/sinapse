@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVATIONS, ACTIVATION_NAMES } from '../src/core/activations';
 import { checkCompatibility, codingsFor, parseCSV, selectColumns, selectionWidths, splitDataset } from '../src/core/dataset';
-import { accuracy, decode, type ColumnCoding } from '../src/core/encoding';
+import { accuracy, confusionMatrix, decode, type ColumnCoding } from '../src/core/encoding';
 import { initFor, initStd } from '../src/core/initialization';
 import { mse } from '../src/core/loss';
 import { Network, withBlocks, type Architecture } from '../src/core/network';
@@ -369,5 +369,42 @@ describe('blocos em paralelo', () => {
     const Y = [[0], [1], [1], [0]];
     new Trainer(net, { inputs: X, targets: Y }, { inputs: X, targets: Y }, { learningRate: 0.5, epochs: 3000, seed: 2 }).run();
     expect(mse(net, X, Y)).toBeLessThan(0.02);
+  });
+});
+
+describe('parada antecipada', () => {
+  it('para quando a validação não melhora e volta aos melhores pesos', () => {
+    // validação impossível de acertar junto com o treino: piora enquanto o treino melhora
+    const X = [[0], [0.25], [0.5], [0.75], [1]];
+    const Y = X.map(([x]) => [x]);
+    const val = { inputs: [[0.5]], targets: [[5]] };
+    const net = Network.create({ inputs: 1, layers: [{ neurons: 4, activation: 'tanh' }, { neurons: 1, activation: 'linear' }] }, 3);
+    const t = new Trainer(net, { inputs: X, targets: Y }, val, { learningRate: 0.1, epochs: 2000, seed: 1, patience: 10 });
+    const hist = t.run();
+    expect(t.stoppedEarly).toBe(true);
+    expect(hist.length).toBeLessThan(2000);
+    expect(hist.length - t.bestEpoch).toBe(10);
+    t.restoreBest();
+    expect(mse(net, val.inputs, val.targets)).toBeCloseTo(t.bestValMSE, 10);
+  });
+
+  it('desligada, roda todas as épocas', () => {
+    const X = [[0], [1]];
+    const t = new Trainer(Network.create({ inputs: 1, layers: [{ neurons: 1, activation: 'linear' }] }, 1), { inputs: X, targets: X }, { inputs: X, targets: X }, { learningRate: 0.1, epochs: 50, seed: 1 });
+    expect(t.run()).toHaveLength(50);
+    expect(t.stoppedEarly).toBe(false);
+  });
+});
+
+describe('matriz de confusão', () => {
+  it('conta real × previsto pelas classes e no caso 0/1', () => {
+    const cod: ColumnCoding[] = [{ nome: 'c', tipo: 'classe', classes: ['a', 'b'] }];
+    const c = confusionMatrix([[0.9, 0.1], [0.2, 0.8], [0.7, 0.3]], [[1, 0], [0, 1], [0, 1]], cod)!;
+    expect(c.labels).toEqual(['a', 'b']);
+    expect(c.m).toEqual([[1, 0], [1, 1]]);
+    const bin = confusionMatrix([[0.8], [0.2], [0.6]], [[1], [0], [0]], undefined)!;
+    expect(bin.labels).toEqual(['1', '0']);
+    expect(bin.m).toEqual([[1, 0], [1, 1]]);
+    expect(confusionMatrix([[0.3]], [[0.37]], undefined)).toBeUndefined();
   });
 });

@@ -21,6 +21,7 @@ export interface NetHandle {
   setWeights(m: SavedModel): void;
   wave(acts: number[][], strong?: boolean): void;
   cycle(c: Cycle, strong?: boolean, flash?: boolean): void;
+  onPick(fn: (layer: number, unit: number) => void): void;
   dispose(): void;
 }
 
@@ -37,6 +38,7 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
   let net3d: Net3D | null = null;
   let flat: NetView | null = null;
   let pending: SavedModel = saved;
+  let pick: ((layer: number, unit: number) => void) | null = null;
   let disposed = false;
   host.classList.add('loading3d');
   loadMod()
@@ -45,6 +47,7 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
       host.classList.remove('loading3d');
       if (!m.webglAvailable()) throw new Error('sem webgl');
       net3d = new m.Net3D(pending);
+      net3d.onPick = pick;
       host.appendChild(net3d.el);
     })
     .catch(() => {
@@ -66,6 +69,11 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
     cycle(c, strong, flash = true) {
       net3d?.cycle(c, strong, flash);
       flat?.cycle(c.acts, c.deltas, flash);
+    },
+    onPick(fn) {
+      pick = fn;
+      if (net3d) net3d.onPick = fn;
+      if (flat) flat.onPick = fn;
     },
     dispose() {
       disposed = true;

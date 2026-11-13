@@ -38,7 +38,26 @@ A pasta `dist/` funciona em qualquer servidor estático (`npm run preview` serve
    dataset* preenche com uma linha real e mostra o valor esperado ao lado.
 5. **Salvar / Abrir rede** (barra lateral): grava e lê a rede em JSON.
 
-Os números aceitam vírgula ou ponto como casa decimal.
+Os números aceitam vírgula ou ponto como casa decimal. O CSV pode vir do Excel em português: separado por `;` ou tab,
+com vírgula decimal (`5,1`) e com qualquer quebra de linha (`\r\n`, `\n` ou só `\r`). A tela Dados mostra as primeiras
+linhas como foram lidas.
+
+### Ferramentas de análise (tela Treino)
+
+- **Um exemplo (passo a passo):** faz um passo do SGD com o próximo exemplo do treino e mostra todas as contas: entrada
+  `x`, saída `o`, esperado `t`, o erro `E = ½Σ(o − t)²`, o `z`, a saída e o `δ` de cada neurônio, e os pesos e vieses que
+  mais mudaram (antes → depois). Os pesos mudam de verdade; a rede mostra o passo acontecendo.
+- **Clique num neurônio** (no 3D ou no 2D): mostra a ativação, o viés, `z`, a saída, o `δ` e os pesos que chegam nele.
+- **Parada antecipada** (campo *Paciência*): com um valor maior que 0, o treino para quando o MSE da validação passa esse
+  número de épocas sem melhorar e a rede volta aos pesos da melhor época. O gráfico marca a melhor época. A validação
+  continua sem ajustar nada: ela só decide quando parar.
+- **Matriz de confusão** (classificação): no conjunto de teste, real × previsto, com o acerto de cada classe.
+- **Execuções:** cada treino fica numa tabela (arquitetura, taxa, épocas, MSE de treino/validação/teste, acerto e a curva
+  da validação), com a de menor erro na validação destacada, para comparar redes. Fica guardada no navegador.
+- **Relatório:** abre a impressão com um relatório da execução (resultado, curva do erro, matriz de confusão, desenho da
+  rede, colunas, divisão, normalização com os parâmetros, treinamento e ajuste dos pesos). Em *Salvar como PDF* vira o
+  arquivo para entregar.
+- **Como foi feito:** um quadro explica a divisão, o treino e o ajuste dos pesos com os números da execução.
 
 ### Colunas com rótulos em texto
 
@@ -183,7 +202,7 @@ certo. A rede reconstruída dá exatamente as mesmas saídas da original. Há um
 
 ## Testes
 
-`npm test` roda 26 testes em `tests/core.test.ts`:
+`npm test` roda 30 testes em `tests/core.test.ts`:
 
 - as derivadas das quatro ativações batem com a derivada numérica;
 - Xavier e He são escolhidos pela ativação, com o desvio esperado, e a mesma semente dá os mesmos pesos;
@@ -198,6 +217,9 @@ certo. A rede reconstruída dá exatamente as mesmas saídas da original. Há um
   com uma mensagem clara;
 - coluna de texto vira classes (one-hot) e conta uma saída por classe; a classe vencedora e a taxa de acerto saem certas; a
   rede com rótulos salva e abre com as classes;
+- CSV no formato do Excel em português (`;`, vírgula decimal, só `\r`);
+- parada antecipada: para depois de `paciência` épocas sem melhorar e volta aos melhores pesos; desligada, roda tudo;
+- matriz de confusão por classe e no caso 0/1;
 - blocos em paralelo: cada bloco só recebe das origens escolhidas, os gradientes batem com o numérico, a rede salva e abre
   com os blocos, bloco sem origem é recusado e uma rede com dois blocos aprende XOR.
 

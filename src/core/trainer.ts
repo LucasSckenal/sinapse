@@ -14,6 +14,11 @@ export interface TrainOptions {
   epochs: number;
   /** Semente da ordem em que os exemplos são apresentados a cada época. */
   seed: number;
+  /**
+   * Parada antecipada: para quando o MSE da validação passa `patience` épocas sem melhorar
+   * e devolve a rede aos pesos da melhor época. 0 ou ausente = desligada.
+   */
+  patience?: number;
 }
 
 export interface EpochResult {
@@ -35,6 +40,12 @@ export class Trainer {
   private readonly rng: Random;
   private readonly order: number[];
   epoch = 0;
+  /** Melhor época pela validação (para a parada antecipada) e os pesos dela. */
+  bestEpoch = 0;
+  bestValMSE = Infinity;
+  stoppedEarly = false;
+  private bestParams: { w: number[]; b: number }[][] | null = null;
+  private sinceBest = 0;
 
   constructor(
     readonly net: Network,
@@ -49,7 +60,24 @@ export class Trainer {
   }
 
   get done(): boolean {
-    return this.epoch >= this.options.epochs;
+    return this.stoppedEarly || this.epoch >= this.options.epochs;
+  }
+
+  private get watching(): boolean {
+    return (this.options.patience ?? 0) > 0 && this.validation.inputs.length > 0;
+  }
+
+  /** Volta a rede para os pesos e vieses da melhor época da validação. */
+  restoreBest(): boolean {
+    if (!this.bestParams) return false;
+    this.net.layers.forEach((l, li) =>
+      l.neurons.forEach((n, ni) => {
+        const p = this.bestParams![li][ni];
+        n.weights = p.w.slice();
+        n.bias = p.b;
+      }),
+    );
+    return true;
   }
 
   step(): EpochResult {
@@ -60,11 +88,16 @@ export class Trainer {
     const trainMSE = mse(this.net, this.train.inputs, this.train.targets);
     if (!Number.isFinite(trainMSE))
       throw new Error('O erro explodiu (ficou infinito). Tente uma taxa de aprendizado menor ou normalizar as entradas.');
-    return {
-      epoch: this.epoch,
-      trainMSE,
-      valMSE: mse(this.net, this.validation.inputs, this.validation.targets),
-    };
+    const valMSE = mse(this.net, this.validation.inputs, this.validation.targets);
+    if (this.watching) {
+      if (valMSE < this.bestValMSE - 1e-12) {
+        this.bestValMSE = valMSE;
+        this.bestEpoch = this.epoch;
+        this.bestParams = this.net.layers.map((l) => l.neurons.map((n) => ({ w: n.weights.slice(), b: n.bias })));
+        this.sinceBest = 0;
+      } else if (++this.sinceBest >= (this.options.patience ?? 0)) this.stoppedEarly = true;
+    }
+    return { epoch: this.epoch, trainMSE, valMSE };
   }
 
   run(onEpoch?: (r: EpochResult) => void): EpochResult[] {
