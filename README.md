@@ -91,6 +91,7 @@ comum, ligada a tudo. Um teste compara esses gradientes com a derivada numérica
   Durante o treino, um exemplo de treino faz o **ciclo inteiro**: os pulsos brancos vão camada por camada com o brilho de
   cada nó igual à sua ativação, o erro volta da saída para a entrada (pulsos cinza, com a força dos deltas calculados de
   verdade) e as ligações piscam quando os pesos são atualizados.
+- **Prévia na Arquitetura**: a rede em 3D (com os pesos iniciais de verdade) acompanha cada opção escolhida; só as camadas que mudaram nascem de novo, com os nós crescendo e as ligações se desenhando.
 - **Tela inicial**: uma rede de verdade (2 → 5 tanh → 1 sigmoid) aprendendo XOR ao vivo com o mesmo núcleo, mostrando o
   mesmo ciclo e o erro caindo.
 - **Superfície do erro** (Treino): o MSE do treino quando só dois pesos variam (os dois que mais mudaram desde o começo) e os

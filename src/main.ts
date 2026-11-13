@@ -1,7 +1,7 @@
 import './ui/styles.css';
 import { fromJSON, toJSON } from './core/persistence';
 import { download, h, icon, logo, pickFile, toast } from './ui/dom';
-import { arquiteturaScreen } from './ui/screens/arquitetura';
+import { arquiteturaScreen, disposeArchPreview } from './ui/screens/arquitetura';
 import { dadosScreen } from './ui/screens/dados';
 import { preverScreen } from './ui/screens/prever';
 import { disposeTreino, leaveTreino, treinoScreen } from './ui/screens/treino';
@@ -86,6 +86,7 @@ function render(): void {
   renderSide();
   if (lastScreen === 'treino') (state.screen === 'treino' ? leaveTreino : disposeTreino)();
   if (lastScreen === 'prever' && state.screen !== 'prever') disposePredictNet();
+  if (lastScreen === 'arquitetura' && state.screen !== 'arquitetura') disposeArchPreview();
   const screen = SCREENS.find((s) => s.id === state.screen)!;
   const el = screen.render();
   if (lastScreen === state.screen) el.style.animation = 'none';

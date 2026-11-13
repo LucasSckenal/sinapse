@@ -22,6 +22,8 @@ export interface NetHandle {
   wave(acts: number[][], strong?: boolean): void;
   cycle(c: Cycle, strong?: boolean, flash?: boolean): void;
   onPick(fn: (layer: number, unit: number) => void): void;
+  /** A arquitetura mudou: redesenha, animando o que é novo. */
+  rebuild(m: SavedModel, arch: { inputs: number; layers: { neurons: number; activation: string }[] }): void;
   dispose(): void;
 }
 
@@ -69,6 +71,16 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
     cycle(c, strong, flash = true) {
       net3d?.cycle(c, strong, flash);
       flat?.cycle(c.acts, c.deltas, flash);
+    },
+    rebuild(m, arch2) {
+      pending = m;
+      if (net3d) net3d.rebuild(m);
+      else if (flat) {
+        const next = new NetView(arch2 as never, m);
+        flat.el.replaceWith(next.el);
+        flat = next;
+        flat.onPick = pick;
+      }
     },
     onPick(fn) {
       pick = fn;

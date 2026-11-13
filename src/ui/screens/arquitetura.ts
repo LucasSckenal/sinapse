@@ -4,12 +4,44 @@ import { expandedNames } from '../../core/encoding';
 import { initFor } from '../../core/initialization';
 import { Network, blocksOf, validateArchitecture, withBlocks, type Architecture, type BlockSpec } from '../../core/network';
 import { h, icon, notice, parseNum, segmented, stepper, toast } from '../dom';
-import { NetView } from '../netview';
+import { serialize } from '../../core/persistence';
+import { mountNet, type NetHandle } from '../net3d-mount';
 import { DEFAULT_HIDDEN, resetTraining, set, state } from '../state';
 
 const MAX_NEURONS = 256;
 const MAX_HIDDEN = 8;
 const MAX_BLOCKS = 6;
+
+/**
+ * Prévia 3D que acompanha a montagem: fica guardada entre os cliques (a câmera não pula) e,
+ * a cada mudança, redesenha a rede animando só as camadas que mudaram. Usa os pesos iniciais
+ * de verdade (com a semente escolhida).
+ */
+let preview: { host: HTMLElement; handle: NetHandle; key: string } | null = null;
+
+function previewFor(arch: Architecture): HTMLElement {
+  let model;
+  try {
+    model = serialize({ net: Network.create(arch, state.initSeed), normalization: null });
+  } catch {
+    // arquitetura inválida (ex.: bloco sem origem): mantém a última prévia
+    return preview?.host ?? h('div', { class: 'preview-host' });
+  }
+  const key = `${JSON.stringify(arch)}#${state.initSeed}`;
+  if (!preview) {
+    const host = h('div', { class: 'preview-host' });
+    preview = { host, handle: mountNet(host, model, arch), key };
+  } else if (preview.key !== key) {
+    preview.handle.rebuild(model, arch);
+    preview.key = key;
+  }
+  return preview.host;
+}
+
+export function disposeArchPreview(): void {
+  preview?.handle.dispose();
+  preview = null;
+}
 /** Índice da camada recém-adicionada (só ela anima ao entrar). */
 let justAdded = -1;
 
@@ -297,7 +329,12 @@ export function arquiteturaScreen(): HTMLElement {
           }),
         ),
       ),
-      h('section', { class: 'card', style: 'min-height:420px' }, h('div', { class: 'lbl wide' }, 'Prévia'), new NetView(arch).el),
+      h(
+        'section',
+        { class: 'card preview-card3d' },
+        h('div', { class: 'card-head' }, h('span', { class: 'lbl wide' }, 'Prévia'), h('span', { class: 'lbl' }, 'pesos iniciais · arraste para girar')),
+        previewFor(arch),
+      ),
     ),
   );
 }

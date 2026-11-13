@@ -254,9 +254,24 @@ abstract class Stage {
     return this.userZoom || this.idleSince > this.createdAt + 50;
   }
 
+  /** Está na página e aparecendo na janela? (conferido direto, sem depender do observador) */
+  private onScreen(): boolean {
+    if (!this.el.isConnected) return false;
+    const r = this.el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  }
+
+  private sleeping = 0;
   private loop = () => {
     cancelAnimationFrame(this.raf);
-    if (this.disposed || !this.visible || document.hidden) return;
+    clearTimeout(this.sleeping);
+    if (this.disposed || document.hidden) return;
+    this.visible = this.onScreen();
+    if (!this.visible) {
+      // fora da tela: dorme e confere de novo daqui a pouco (ou quando o observador avisar)
+      this.sleeping = window.setTimeout(this.loop, 500);
+      return;
+    }
     this.raf = requestAnimationFrame((now) => {
       const dt = Math.min(0.05, (now - this.last) / 1000) * (reduced() ? 0.35 : 1);
       this.last = now;
@@ -283,6 +298,7 @@ abstract class Stage {
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
+    clearTimeout(this.sleeping);
     this.ro.disconnect();
     this.io.disconnect();
     document.removeEventListener('visibilitychange', this.onVis);
@@ -357,6 +373,83 @@ export class Net3D extends Stage {
     super(`Rede neural em 3D com ${model.entradas} entradas e ${model.camadas.length} camadas`);
     this.build(model);
     this.setWeights(model);
+  }
+
+  /** Assinatura de cada camada (tamanho, blocos, ativações), para saber o que mudou. */
+  private layerKeys: string[] = [];
+  /** Quando cada camada começa a aparecer (segundos da cena); -1 = já está lá. */
+  private growAt: number[] = [];
+  private growing = false;
+  private baseLine: Float32Array | null = null;
+  private labelsBox: HTMLElement | null = null;
+
+  /**
+   * Troca a rede desenhada por outra (a arquitetura mudou). As camadas que mudaram nascem
+   * de novo, uma depois da outra: os nós crescem e as ligações se desenham. O resto fica.
+   */
+  rebuild(model: SavedModel): void {
+    const oldKeys = this.layerKeys;
+    for (const c of this.root.children.slice()) {
+      this.root.remove(c);
+      const m = c as THREE.Mesh;
+      m.geometry?.dispose?.();
+      const mat = m.material as THREE.Material | undefined;
+      mat?.dispose?.();
+    }
+    this.labelsBox?.remove();
+    this.labels = [];
+    this.pulses = [];
+    this.wave = null;
+    this.ring = null;
+    this.build(model);
+    this.setWeights(model);
+    let order = 0;
+    this.growAt = this.layerKeys.map((k, l) => {
+      const changed = oldKeys[l] !== k || (l > 0 && oldKeys[l - 1] !== this.layerKeys[l - 1]);
+      return changed ? this.time + 0.05 + 0.16 * order++ : -1;
+    });
+    this.growing = this.growAt.some((t) => t >= 0);
+  }
+
+  private growOf(l: number): number {
+    const at = this.growAt[l] ?? -1;
+    if (at < 0) return 1;
+    const t = Math.min(1, Math.max(0, (this.time - at) / 0.45));
+    // sai um pouco do tamanho e volta (estouro), como algo que brota
+    const c = 1.70158;
+    return t === 0 ? 0 : 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+  }
+
+  private edgeRevealOf(l: number): number {
+    const at = this.growAt[l] ?? -1;
+    if (at < 0) return 1;
+    return Math.min(1, Math.max(0, (this.time - at - 0.12) / 0.4));
+  }
+
+  private applyGrowth(): void {
+    if (!this.growing) return;
+    if (this.baseLine) {
+      const bg = BG;
+      this.edges.forEach((e, k) => {
+        const r = this.edgeRevealOf(e.layer + 1);
+        for (let v = 0; v < 6; v += 3) {
+          const i = k * 6 + v;
+          this.lineColors[i] = bg.r + (this.baseLine![i] - bg.r) * r;
+          this.lineColors[i + 1] = bg.g + (this.baseLine![i + 1] - bg.g) * r;
+          this.lineColors[i + 2] = bg.b + (this.baseLine![i + 2] - bg.b) * r;
+        }
+      });
+      (this.lines.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
+    }
+    const last = Math.max(...this.growAt);
+    if (this.time > last + 1) {
+      this.growing = false;
+      this.growAt = this.growAt.map(() => -1);
+      if (this.baseLine) {
+        this.lineColors.set(this.baseLine);
+        (this.lines.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
+      }
+    }
   }
 
   private build(model: SavedModel): void {
@@ -485,6 +578,7 @@ export class Net3D extends Stage {
       this.tmpColor.lerpColors(BG, this.tmpColor, 0.025 + Math.pow(a, 1.6) * 0.9);
       this.lineColors.set([this.tmpColor.r, this.tmpColor.g, this.tmpColor.b, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b], k * 6);
     });
+    this.baseLine = this.lineColors.slice();
     (this.lines.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
   }
 
@@ -579,11 +673,15 @@ export class Net3D extends Stage {
   }
 
   /** Rótulos de cada camada (e letra de cada bloco), presos à cena e reprojetados a cada quadro. */
-  private labels: { el: HTMLElement; at: THREE.Vector3 }[] = [];
+  private labels: { el: HTMLElement; at: THREE.Vector3; layer?: number }[] = [];
   private buildLabels(topo: ReturnType<typeof topology>, cols: number, gapX: number): void {
     const box = document.createElement('div');
     box.className = 'labels3d';
     this.el.appendChild(box);
+    this.labelsBox = box;
+    this.layerKeys = topo.blocks.map((bs) => bs.map((b) => `${b.count}:${b.activation}`).join('|'));
+    // origens dos blocos também mudam a camada
+    topo.sources.forEach((src, l) => (this.layerKeys[l + 1] += `#${JSON.stringify(src.map((s) => s?.join(',') ?? '*'))}`));
     const NAMES: Record<string, string> = { entrada: 'Entrada', linear: 'Linear', sigmoid: 'Sigmoid', tanh: 'Tanh', relu: 'ReLU' };
     topo.blocks.forEach((blocks, l) => {
       const ys = this.nodePos[l].filter(Boolean).map((p) => p.y);
@@ -597,7 +695,7 @@ export class Net3D extends Stage {
       sub.textContent = l === 0 ? '' : acts;
       name.appendChild(sub);
       box.appendChild(name);
-      this.labels.push({ el: name, at: new THREE.Vector3(x, Math.min(...ys) - 0.75, 0) });
+      this.labels.push({ el: name, at: new THREE.Vector3(x, Math.min(...ys) - 0.75, 0), layer: l });
       if (blocks.length > 1)
         blocks.forEach((b, k) => {
           const first = this.nodePos[l][b.start];
@@ -606,7 +704,7 @@ export class Net3D extends Stage {
           tag.className = 'l3d-block';
           tag.textContent = 'ABCDEFGHIJKLMNOP'[k];
           box.appendChild(tag);
-          this.labels.push({ el: tag, at: new THREE.Vector3(x, first.y + 0.5, 0) });
+          this.labels.push({ el: tag, at: new THREE.Vector3(x, first.y + 0.5, 0), layer: l });
         });
     });
   }
@@ -625,6 +723,8 @@ export class Net3D extends Stage {
 
   protected tick(dt: number): void {
     this.placeLabels();
+    this.applyGrowth();
+    for (const { el, layer } of this.labels) if (layer !== undefined) el.style.opacity = String(Math.min(1, this.growOf(layer)));
     if (this.ring) this.ring.quaternion.copy(this.camera.quaternion);
     // pisca as ligações quando o erro termina de voltar (pesos atualizados)
     if (this.flashAt >= 0 && this.time >= this.flashAt) {
@@ -687,14 +787,15 @@ export class Net3D extends Stage {
     this.nodePos.forEach((col, l) =>
       col.forEach((p, k) => {
         const g = this.glow[l][k];
+        const grow = this.growOf(l);
         this.dummy.position.copy(p);
-        this.dummy.scale.setScalar(0.85 + g * 0.35);
+        this.dummy.scale.setScalar((0.85 + g * 0.35) * grow);
         this.dummy.updateMatrix();
         const idx = this.nodeIndex[l][k];
         this.nodes.setMatrixAt(idx, this.dummy.matrix);
         this.tmpColor.setScalar(0.05 + g * 0.75);
         this.nodes.setColorAt(idx, this.tmpColor);
-        this.dummy.scale.setScalar(0.6 + g * 0.6);
+        this.dummy.scale.setScalar((0.6 + g * 0.6) * grow);
         this.dummy.updateMatrix();
         this.halos.setMatrixAt(idx, this.dummy.matrix);
         this.tmpColor.setScalar(g * g * g * 0.09);
