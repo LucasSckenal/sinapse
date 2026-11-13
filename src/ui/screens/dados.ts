@@ -53,7 +53,7 @@ async function readFile(file: File): Promise<void> {
   }
 }
 
-async function loadExample(file: string): Promise<void> {
+export async function loadExample(file: string): Promise<void> {
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}exemplos/${file}`);
     if (!res.ok) throw new Error('Não deu para abrir o exemplo.');

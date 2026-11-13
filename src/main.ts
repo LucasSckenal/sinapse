@@ -1,6 +1,7 @@
 import './ui/styles.css';
 import { fromJSON, toJSON } from './core/persistence';
 import { download, h, icon, logo, pickFile, toast } from './ui/dom';
+import { isPresenting, startPresentation } from './ui/present';
 import { arquiteturaScreen, disposeArchPreview } from './ui/screens/arquitetura';
 import { dadosScreen } from './ui/screens/dados';
 import { preverScreen } from './ui/screens/prever';
@@ -17,7 +18,7 @@ const SCREENS: { id: ScreenName; label: string; icon: string; render: () => HTML
   { id: 'lab', label: 'Laboratório', icon: 'sparkle', render: labScreen, done: () => false },
 ];
 
-const busy = () => state.status === 'rodando' || state.status === 'pausado';
+const busy = () => state.status === 'rodando' || state.status === 'pausado' || isPresenting();
 
 async function openModel(): Promise<void> {
   const file = await pickFile('.json,application/json');
@@ -75,6 +76,12 @@ function renderSide(): void {
       'div',
       { class: 'side-foot' },
       h('div', { class: 'model-chip mono', title: m ? state.modelName : '' }, m ? `${state.modelName} · ${state.modelTrained ? 'treinada' : 'nova'}` : ''),
+      h(
+        'button',
+        { type: 'button', class: 'ghost present-btn', disabled: busy(), onclick: () => void startPresentation(), title: 'Roda a demonstração sozinha, com legendas (Esc para sair)', 'aria-label': 'Apresentar' },
+        icon('play'),
+        h('span', null, 'Apresentar'),
+      ),
       h('button', { type: 'button', class: 'ghost', disabled: busy(), onclick: openModel, title: 'Abrir rede salva (JSON)', 'aria-label': 'Abrir rede' }, icon('upload'), h('span', null, 'Abrir rede')),
       h('button', { type: 'button', class: 'ghost', disabled: !m || busy(), onclick: saveModel, title: 'Salvar rede em JSON', 'aria-label': 'Salvar rede' }, icon('download'), h('span', null, 'Salvar')),
     ),

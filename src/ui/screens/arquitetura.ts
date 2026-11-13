@@ -205,7 +205,7 @@ function layerGroup(i: number): HTMLElement {
   );
 }
 
-function createNetwork(): void {
+export function createNetwork(): void {
   try {
     const net = Network.create(state.arch, state.initSeed);
     const t = state.table;

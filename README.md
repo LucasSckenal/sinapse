@@ -42,6 +42,19 @@ Os números aceitam vírgula ou ponto como casa decimal. O CSV pode vir do Excel
 com vírgula decimal (`5,1`) e com qualquer quebra de linha (`\r\n`, `\n` ou só `\r`). A tela Dados mostra as primeiras
 linhas como foram lidas.
 
+### Desenhe um número, Laboratório e Apresentar
+
+- **Desenhe um número** (exemplo *Dígitos*): o conjunto `digits` do scikit-learn (1.797 dígitos escritos à mão, 8×8 pixels
+  de 0 a 16, licença BSD) vira um exemplo, já com uma arquitetura sugerida (64 → 32 ReLU → 10 sigmoid, 30 épocas, chega a
+  cerca de 96% de acerto no teste). Depois de treinar, a tela Prever troca os 64 campos por um quadro: você desenha um número
+  com o mouse ou o dedo e a rede responde na hora, com a confiança e a barra de cada dígito. O desenho passa pelo mesmo
+  caminho do conjunto original: grade 32×32 em preto e branco, centralizada, contada em blocos 4×4 (0 a 16 por bloco).
+- **Laboratório** (menu): clique para pôr pontos de até três classes (teclas 1, 2 e 3 trocam a classe; botão direito apaga) e
+  uma rede de verdade, com o mesmo núcleo, treina sem parar com eles. A fronteira se forma na hora; dá para mudar camadas,
+  neurônios, ativação e taxa no meio. *Usar como dataset* leva os pontos para a tela Dados como um CSV (x, y, classe).
+- **Apresentar** (menu): roda a demonstração sozinha em 8 passos com legendas — dados, a rede sendo montada, o treino ao vivo,
+  fronteira e matriz, superfície do erro, previsão e o Laboratório. Tudo acontece de verdade no app. Esc ou *Sair* para.
+
 ### Ferramentas de análise (tela Treino)
 
 - **Um exemplo (passo a passo):** faz um passo do SGD com o próximo exemplo do treino e mostra todas as contas: entrada
@@ -106,13 +119,15 @@ WebGL, a rede aparece no desenho 2D com os mesmos pesos.
 
 ### Datasets de exemplo
 
-Ficam em `public/exemplos/` e são **sintéticos**, gerados por fórmula em `scripts/gerar-exemplos.mjs` (`npm run exemplos`):
+Ficam em `public/exemplos/`. Os quatro primeiros são **sintéticos**, gerados por fórmula em `scripts/gerar-exemplos.mjs`
+(`npm run exemplos`); o de dígitos é real:
 
 | Arquivo | Entradas → saídas | Para que serve |
 |---|---|---|
 | `xor.csv` | a, b → xor | o problema clássico que precisa de camada oculta |
 | `seno.csv` | ângulo em graus (0 a 360) → seno | regressão; a entrada em escala grande mostra o efeito da normalização |
 | `circulo.csv` | x, y → dentro, fora | classificação com duas saídas (ponto dentro do círculo de raio 0,6) |
+| `digitos.csv` | 64 pixels (p00…p77, 0 a 16) → digito (`zero`…`nove`) | **dados reais**: o conjunto `digits` do scikit-learn (BSD), dígitos escritos à mão |
 | `espiral.csv` | x, y → braco (`norte`, `leste`, `oeste`) | classificação com **rótulo em texto**, três braços de uma espiral |
 
 ## Onde está cada requisito
