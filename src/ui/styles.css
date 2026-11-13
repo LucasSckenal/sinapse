@@ -300,6 +300,15 @@ table.step-table td:first-child { color: var(--t1); font-family: var(--font); }
 .changes span { color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .changes b { font-weight: 400; color: var(--t1); }
 .changes i { font-style: normal; color: var(--t3); text-align: right; }
+.digit-card { gap: 14px; }
+.pad-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 16px; align-items: start; }
+canvas.pad { width: 100%; aspect-ratio: 1; border-radius: 16px; border: 1px solid var(--line2); cursor: crosshair; touch-action: none; display: block; background: var(--s1); }
+.pad-side { display: grid; gap: 14px; justify-items: start; }
+.pad-mini-box { display: grid; gap: 6px; }
+canvas.pad-mini { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 10px; border: 1px solid var(--line2); }
+.guess { display: flex; align-items: baseline; gap: 10px; min-height: 64px; }
+.guess-num { font-size: 64px; line-height: 1; font-weight: 300; font-variation-settings: 'wdth' 125; color: var(--t1); }
+.guess .mono { font-size: 14px; color: var(--t2); }
 .explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border-radius: var(--r3); overflow: hidden; border: 1px solid var(--line); }
 .explain > div { background: var(--s1); padding: 22px 24px; display: grid; gap: 10px; align-content: start; }
 .explain h3 { font-size: 13px; font-weight: 300; font-variation-settings: 'wdth' 125; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t1); }
@@ -439,6 +448,8 @@ canvas.boundary { width: 100%; aspect-ratio: 1; border-radius: 14px; display: bl
   .preview-card3d { position: relative; top: 0; height: 380px; }
   .explain { grid-template-columns: 1fr; }
   .step-flow { grid-template-columns: 1fr 1fr; }
+  .pad-wrap { grid-template-columns: 1fr; }
+  .pad-side { grid-auto-flow: column; align-items: end; }
   .inspector { left: 16px; right: 16px; width: auto; }
   .stage-card { position: relative; top: 0; height: 440px; }
   .hint-drag { display: none; }

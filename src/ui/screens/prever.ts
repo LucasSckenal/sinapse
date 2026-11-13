@@ -4,6 +4,7 @@ import { predictColumns } from '../../core/predict';
 import { fmt, h, icon, notice, parseNum, segmented } from '../dom';
 import { set, state } from '../state';
 import { predictNetFor } from '../net3d-mount';
+import { DigitPad, digitOf, isDigitModel } from '../draw';
 
 /** Valores digitados ficam guardados enquanto a mesma rede estiver aberta. */
 let draft: string[] = [];
@@ -88,11 +89,15 @@ export function preverScreen(): HTMLElement {
           h(
             'div',
             { class: 'class-bars' },
-            d.valores.map((v, i) =>
+            d.valores
+              .map((v, i) => ({ v, i }))
+              // dígitos: em ordem de 0 a 9, com o número ao lado do nome
+              .sort((x, y) => (isDigitModel(model) ? Number(digitOf(x.v.classe)) - Number(digitOf(y.v.classe)) : x.i - y.i))
+              .map(({ v, i }) =>
               h(
                 'div',
                 { class: `class-bar ${i === d.indice ? 'win' : ''}` },
-                h('span', { class: 'cn' }, v.classe),
+                h('span', { class: 'cn' }, isDigitModel(model) ? `${digitOf(v.classe)} · ${v.classe}` : v.classe),
                 h('span', { class: 'track' }, h('i', { style: `transform:scaleX(${Math.max(0, v.valor) / max})` })),
                 h('span', { class: 'cv mono' }, fmt(v.valor, 3)),
               ),
@@ -164,6 +169,7 @@ export function preverScreen(): HTMLElement {
     try {
       const r = predictColumns(model, values);
       showOutputs(r.decoded);
+      showGuess(r.decoded);
       lastManual = performance.now();
       net3d.light();
     } catch (e) {
@@ -239,6 +245,37 @@ export function preverScreen(): HTMLElement {
   };
 
   showOutputs(null);
+
+  // rede de dígitos 8×8: desenhar no lugar de digitar 64 números
+  const digits = isDigitModel(model);
+  const guessEl = h('div', { class: 'guess', 'aria-live': 'polite' });
+  const showGuess = (decoded: import('../../core/encoding').Decoded[] | null) => {
+    if (!digits) return;
+    const d = decoded?.[0];
+    if (!d || d.tipo !== 'classe') {
+      guessEl.replaceChildren();
+      return;
+    }
+    const total = d.valores.reduce((s, v) => s + Math.max(0, v.valor), 0) || 1;
+    const conf = Math.round((Math.max(0, d.valores[d.indice].valor) / total) * 100);
+    guessEl.replaceChildren(h('b', { class: 'guess-num flash' }, digitOf(d.classe)), h('span', { class: 'mono' }, `${conf}%`));
+  };
+  const pad = digits
+    ? new DigitPad((v) => {
+        if (!v) {
+          showOutputs(null);
+          showGuess(null);
+          return;
+        }
+        draft = v.map(String);
+        expected = null;
+        run();
+      })
+    : null;
+  if (pad && draft.some((x) => x !== '' && x !== '0')) {
+    const vals = draft.map(Number);
+    if (vals.every(Number.isFinite)) pad.show(vals);
+  }
   const normTxt = model.normalization ? `normalizadas com ${NORMALIZATION_LABELS[model.normalization.tipo]}` : 'sem normalização';
   const n = cods.length;
 
@@ -260,7 +297,15 @@ export function preverScreen(): HTMLElement {
     h(
       'div',
       { class: 'grid2' },
-      h(
+      digits
+        ? h(
+            'section',
+            { class: 'card digit-card' },
+            h('div', { class: 'card-head' }, h('span', { class: 'lbl wide' }, 'Desenhe um número'), guessEl),
+            pad!.el,
+            errBox,
+          )
+        : h(
         'section',
         { class: 'card' },
         h('div', { class: 'lbl wide' }, 'Entradas'),

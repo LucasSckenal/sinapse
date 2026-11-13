@@ -10,7 +10,20 @@ const EXAMPLES = [
   { file: 'seno.csv', label: 'Seno', icon: 'wave' },
   { file: 'circulo.csv', label: 'Círculo', icon: 'circle' },
   { file: 'espiral.csv', label: 'Espiral', icon: 'spiral' },
+  { file: 'digitos.csv', label: 'Dígitos', icon: 'pencil' },
 ];
+
+/** Ajustes sugeridos para cada exemplo (o resto fica como está). */
+const PRESETS: Record<string, () => void> = {
+  'digitos.csv': () => {
+    set({
+      arch: { inputs: 64, layers: [{ neurons: 32, activation: 'relu' }, { neurons: 10, activation: 'sigmoid' }] },
+      learningRate: 0.05,
+      epochs: 30,
+      normalization: 'minmax',
+    });
+  },
+};
 
 type Role = 'entrada' | 'saida' | 'nada';
 
@@ -45,6 +58,7 @@ async function loadExample(file: string): Promise<void> {
     const res = await fetch(`${import.meta.env.BASE_URL}exemplos/${file}`);
     if (!res.ok) throw new Error('Não deu para abrir o exemplo.');
     loadTable(parseCSV(await res.text()), file);
+    PRESETS[file]?.();
   } catch (e) {
     toast((e as Error).message, 'err');
   }
