@@ -47,6 +47,27 @@ const PATHS: Record<string, string> = {
   arrow: 'M5 12h14m0 0-5-5m5 5-5 5',
   dice: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8.5 8.5h.01M15.5 15.5h.01M12 12h.01',
   restart: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5',
+  // telas
+  database: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  layers: 'M12 3l9 4.5-9 4.5-9-4.5L12 3zM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5',
+  activity: 'M3 12h4l3-8 4 16 3-8h4',
+  target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01',
+  // ações
+  step: 'M5 5v14l10-7zM19 5v14',
+  file: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6zM14 3v6h6M8 13h8M8 17h5',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
+  sparkle: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6',
+  swap: 'M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7',
+  enter: 'M9 10 4 15l5 5M20 4v7a4 4 0 0 1-4 4H4',
+  // vistas
+  cube: 'M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5zM3.5 7 12 11.5 20.5 7M12 11.5v10',
+  nodes: 'M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 7.5l6.8 3M8.6 16.5l6.8-3',
+  mountain: 'M3 20l6-11 4 6 3-4 5 9H3z',
+  // exemplos
+  xor: 'M5 5l14 14M19 5 5 19',
+  wave: 'M2 12c2.5-6 5-6 7.5 0s5 6 7.5 0 3.5-4 5-3',
+  circle: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 12h.01',
+  spiral: 'M12 12a1.5 1.5 0 1 1 1.5 1.5 3.5 3.5 0 0 1-3.5-3.5 5 5 0 0 1 5-5 7 7 0 0 1 7 7 8.5 8.5 0 0 1-8.5 8.5A9.5 9.5 0 0 1 2.5 10'
 };
 
 export function icon(name: keyof typeof PATHS | string): SVGElement {
@@ -108,7 +129,7 @@ export function notice(message: string, kind: 'err' | 'ok' | 'info' = 'info'): H
 }
 
 export function segmented<T extends string>(
-  options: { value: T; label: string }[],
+  options: { value: T; label: string; icon?: string }[],
   current: T,
   onChange: (v: T) => void,
   opts: { label: string; disabled?: boolean },
@@ -125,6 +146,7 @@ export function segmented<T extends string>(
           disabled: opts.disabled,
           onclick: () => o.value !== current && onChange(o.value),
         },
+        o.icon ? icon(o.icon) : null,
         o.label,
       ),
     ),

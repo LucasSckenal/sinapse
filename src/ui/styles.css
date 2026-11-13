@@ -80,6 +80,12 @@ button, input, select { font: inherit; color: inherit; }
 .step:hover { background: var(--s1); color: var(--t1); }
 .step:active { transform: scale(0.98); }
 .step[aria-current='page'] { background: var(--s2); color: var(--t1); }
+.step-icon { position: relative; width: 18px; height: 18px; flex: none; color: var(--t3); transition: color var(--mid) var(--ease); }
+.step-icon svg { width: 18px; height: 18px; display: block; }
+.step.done .step-icon { color: var(--t2); }
+.step.done .step-icon::after { content: ''; position: absolute; right: -3px; bottom: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--t2); box-shadow: 0 0 0 2px var(--bg); }
+.step[aria-current='page'] .step-icon { color: var(--t1); }
+.step:hover .step-icon { color: var(--t1); }
 .step .dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--t3); transition: background var(--mid) var(--ease), border-color var(--mid) var(--ease), box-shadow var(--mid) var(--ease); flex: none; }
 .step.done .dot { background: var(--t2); border-color: var(--t2); }
 .step[aria-current='page'] .dot { background: var(--ac); border-color: var(--ac); box-shadow: 0 0 0 4px var(--hi-3); }
@@ -119,7 +125,7 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .ghost:hover:not(:disabled) { color: var(--t1); border-color: var(--t3); }
 .ghost:active:not(:disabled) { transform: scale(0.96); }
 .ghost:disabled { opacity: 0.35; cursor: not-allowed; }
-.ghost svg { width: 14px; height: 14px; display: none; }
+.ghost svg { width: 14px; height: 14px; display: block; flex: none; }
 .icon-btn {
   width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px;
   background: none; border: 0; color: var(--t3); cursor: pointer;
@@ -159,6 +165,8 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .seg button:hover { color: var(--t1); }
 .seg button:active { transform: scale(0.95); }
 .seg button[aria-pressed='true'] { background: var(--t1); color: var(--on-ac); }
+.seg button { display: inline-flex; align-items: center; gap: 6px; }
+.seg button svg { width: 13px; height: 13px; flex: none; }
 .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .stepper { display: inline-flex; align-items: center; background: var(--s2); border: 1px solid var(--line2); border-radius: 10px; }
@@ -205,6 +213,7 @@ h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1; }
 .drop .drop-hint { color: var(--t3); }
 .drop.over .drop-hint { color: var(--t1); }
 .drop.loading { pointer-events: none; opacity: 0.6; }
+.examples .btn svg { width: 15px; height: 15px; }
 .examples { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .drop { padding: 48px 24px; }
 .demo { width: min(640px, 100%); display: grid; gap: 4px; justify-items: center; pointer-events: none; }
@@ -439,8 +448,9 @@ canvas.boundary { width: 100%; aspect-ratio: 1; border-radius: 14px; display: bl
 }
 @media (max-width: 520px) {
   .brand { display: none; }
-  .step { font-size: 12px; gap: 6px; padding: 8px; }
+  .step { font-size: 0; gap: 0; padding: 10px; }
   .step .dot { display: none; }
+  .step-icon, .step-icon svg { width: 20px; height: 20px; }
   .side-foot .ghost { padding: 8px; }
   .side-foot .ghost span { display: none; }
   .side-foot .ghost svg { display: block; width: 16px; height: 16px; }

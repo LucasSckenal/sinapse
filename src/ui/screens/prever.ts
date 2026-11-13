@@ -281,7 +281,7 @@ export function preverScreen(): HTMLElement {
           'div',
           { class: 'line-field' },
           h('label', { class: 'field', style: 'flex:1' }, h('span', null, 'Ou cole a linha inteira'), lineInput),
-          h('button', { type: 'button', class: 'btn line small', onclick: runLine }, 'Usar'),
+          h('button', { type: 'button', class: 'btn line small', onclick: runLine }, icon('enter'), 'Usar'),
         ),
         errBox,
       ),

@@ -8,11 +8,11 @@ import { disposeTreino, leaveTreino, treinoScreen } from './ui/screens/treino';
 import { disposePredictNet } from './ui/net3d-mount';
 import { onChange, resetTraining, set, state, type ScreenName } from './ui/state';
 
-const SCREENS: { id: ScreenName; label: string; render: () => HTMLElement; done: () => boolean }[] = [
-  { id: 'dados', label: 'Dados', render: dadosScreen, done: () => !!state.table && state.selection.inputs.length > 0 && state.selection.outputs.length > 0 },
-  { id: 'arquitetura', label: 'Arquitetura', render: arquiteturaScreen, done: () => !!state.model },
-  { id: 'treino', label: 'Treino', render: treinoScreen, done: () => state.modelTrained },
-  { id: 'prever', label: 'Prever', render: preverScreen, done: () => false },
+const SCREENS: { id: ScreenName; label: string; icon: string; render: () => HTMLElement; done: () => boolean }[] = [
+  { id: 'dados', label: 'Dados', icon: 'database', render: dadosScreen, done: () => !!state.table && state.selection.inputs.length > 0 && state.selection.outputs.length > 0 },
+  { id: 'arquitetura', label: 'Arquitetura', icon: 'layers', render: arquiteturaScreen, done: () => !!state.model },
+  { id: 'treino', label: 'Treino', icon: 'activity', render: treinoScreen, done: () => state.modelTrained },
+  { id: 'prever', label: 'Prever', icon: 'target', render: preverScreen, done: () => false },
 ];
 
 const busy = () => state.status === 'rodando' || state.status === 'pausado';
@@ -64,7 +64,7 @@ function renderSide(): void {
           'aria-label': s.label,
           onclick: () => set({ screen: s.id }),
         },
-        h('span', { class: 'dot' }),
+        h('span', { class: 'step-icon', 'aria-hidden': 'true' }, icon(s.icon)),
         s.label,
         s.id === 'treino' && statusHint ? h('span', { class: 'hint' }, statusHint) : null,
       ),

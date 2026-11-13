@@ -321,9 +321,9 @@ export function treinoScreen(): HTMLElement {
   const makeSeg = () =>
     segmented<View>(
       [
-        { value: 'rede', label: '3D' },
-        { value: 'plano', label: '2D' },
-        { value: 'superficie', label: 'Superfície do erro' },
+        { value: 'rede', label: '3D', icon: 'cube' },
+        { value: 'plano', label: '2D', icon: 'nodes' },
+        { value: 'superficie', label: 'Superfície do erro', icon: 'mountain' },
       ],
       v.view,
       setView,
@@ -363,8 +363,8 @@ export function treinoScreen(): HTMLElement {
         'div',
         { class: 'actions' },
         busy ? h('button', { type: 'button', class: 'btn line', onclick: stopTraining }, icon('stop'), 'Parar') : null,
-        canStep ? h('button', { type: 'button', class: 'btn line', onclick: doStep, title: 'Faz um passo do SGD com um exemplo e mostra todas as contas' }, 'Um exemplo') : null,
-        st === 'fim' ? h('button', { type: 'button', class: 'btn line', onclick: printReport, title: 'Abre a impressão com o relatório desta execução (salve como PDF)' }, icon('download'), 'Relatório') : null,
+        canStep ? h('button', { type: 'button', class: 'btn line', onclick: doStep, title: 'Faz um passo do SGD com um exemplo e mostra todas as contas' }, icon('step'), 'Um exemplo') : null,
+        st === 'fim' ? h('button', { type: 'button', class: 'btn line', onclick: printReport, title: 'Abre a impressão com o relatório desta execução (salve como PDF)' }, icon('file'), 'Relatório') : null,
         st === 'fim' ? h('button', { type: 'button', class: 'btn line', onclick: () => set({ screen: 'prever' }) }, 'Prever', icon('arrow')) : null,
         mainBtn,
       ),
@@ -554,6 +554,7 @@ function runsCard(): HTMLElement | null {
             set({ runs: [] });
           },
         },
+        icon('trash'),
         'Limpar',
       ),
     ),

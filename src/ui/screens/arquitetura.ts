@@ -231,7 +231,7 @@ export function arquiteturaScreen(): HTMLElement {
       h(
         'div',
         { class: 'actions' },
-        h('button', { type: 'button', class: 'btn primary', disabled: busy, title: busy ? 'Pare o treino antes de criar outra rede' : undefined, onclick: createNetwork }, 'Criar rede', icon('arrow')),
+        h('button', { type: 'button', class: 'btn primary', disabled: busy, title: busy ? 'Pare o treino antes de criar outra rede' : undefined, onclick: createNetwork }, icon('sparkle'), 'Criar rede'),
       ),
     ),
     busy ? notice('Há um treino em andamento. Pare o treino para criar outra rede.') : null,

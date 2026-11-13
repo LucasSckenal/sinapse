@@ -6,10 +6,10 @@ import { syncArchWithData } from './arquitetura';
 import { xorDemo } from '../demo';
 
 const EXAMPLES = [
-  { file: 'xor.csv', label: 'XOR' },
-  { file: 'seno.csv', label: 'Seno' },
-  { file: 'circulo.csv', label: 'Círculo' },
-  { file: 'espiral.csv', label: 'Espiral' },
+  { file: 'xor.csv', label: 'XOR', icon: 'xor' },
+  { file: 'seno.csv', label: 'Seno', icon: 'wave' },
+  { file: 'circulo.csv', label: 'Círculo', icon: 'circle' },
+  { file: 'espiral.csv', label: 'Espiral', icon: 'spiral' },
 ];
 
 type Role = 'entrada' | 'saida' | 'nada';
@@ -85,7 +85,7 @@ function dropZone(): HTMLElement {
       'div',
       { style: 'display:grid;gap:12px;justify-items:center' },
       h('span', { class: 'lbl wide' }, 'Ou use um exemplo'),
-      h('div', { class: 'examples' }, EXAMPLES.map((ex) => h('button', { type: 'button', class: 'btn line small', onclick: () => loadExample(ex.file) }, ex.label))),
+      h('div', { class: 'examples' }, EXAMPLES.map((ex) => h('button', { type: 'button', class: 'btn line small', onclick: () => loadExample(ex.file) }, icon(ex.icon), ex.label))),
     ),
     input,
   );
@@ -251,7 +251,7 @@ export function dadosScreen(): HTMLElement {
       h(
         'div',
         { class: 'actions' },
-        h('button', { type: 'button', class: 'btn line', onclick: () => input.click() }, 'Trocar arquivo'),
+        h('button', { type: 'button', class: 'btn line', onclick: () => input.click() }, icon('swap'), 'Trocar arquivo'),
         h('button', { type: 'button', class: 'btn primary', disabled: !ready, onclick: () => set({ screen: 'arquitetura' }) }, 'Arquitetura', icon('arrow')),
         input,
       ),
