@@ -4,6 +4,7 @@ import { download, h, icon, logo, pickFile, toast } from './ui/dom';
 import { arquiteturaScreen, disposeArchPreview } from './ui/screens/arquitetura';
 import { dadosScreen } from './ui/screens/dados';
 import { preverScreen } from './ui/screens/prever';
+import { labScreen } from './ui/screens/lab';
 import { disposeTreino, leaveTreino, treinoScreen } from './ui/screens/treino';
 import { disposePredictNet } from './ui/net3d-mount';
 import { onChange, resetTraining, set, state, type ScreenName } from './ui/state';
@@ -13,6 +14,7 @@ const SCREENS: { id: ScreenName; label: string; icon: string; render: () => HTML
   { id: 'arquitetura', label: 'Arquitetura', icon: 'layers', render: arquiteturaScreen, done: () => !!state.model },
   { id: 'treino', label: 'Treino', icon: 'activity', render: treinoScreen, done: () => state.modelTrained },
   { id: 'prever', label: 'Prever', icon: 'target', render: preverScreen, done: () => false },
+  { id: 'lab', label: 'Laboratório', icon: 'sparkle', render: labScreen, done: () => false },
 ];
 
 const busy = () => state.status === 'rodando' || state.status === 'pausado';

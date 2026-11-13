@@ -5,7 +5,7 @@ import type { NormalizationName } from '../core/normalization';
 import type { Model } from '../core/persistence';
 import type { EpochResult } from '../core/trainer';
 
-export type ScreenName = 'dados' | 'arquitetura' | 'treino' | 'prever';
+export type ScreenName = 'dados' | 'arquitetura' | 'treino' | 'prever' | 'lab';
 
 export type TrainStatus = 'parado' | 'rodando' | 'pausado' | 'fim' | 'erro';
 

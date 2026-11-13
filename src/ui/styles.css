@@ -309,6 +309,12 @@ canvas.pad-mini { width: 96px; height: 96px; image-rendering: pixelated; border-
 .guess { display: flex; align-items: baseline; gap: 10px; min-height: 64px; }
 .guess-num { font-size: 64px; line-height: 1; font-weight: 300; font-variation-settings: 'wdth' 125; color: var(--t1); }
 .guess .mono { font-size: 14px; color: var(--t2); }
+.lab-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+.lab-board { padding: 16px; gap: 10px; }
+canvas.lab-canvas { width: 100%; aspect-ratio: 1; border-radius: 14px; display: block; cursor: crosshair; touch-action: none; background: var(--s2); }
+.lab-hint { font-size: 13px; color: var(--t2); min-height: 20px; }
+.lab-side { gap: 14px; }
+.lab-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--t2); }
 .explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border-radius: var(--r3); overflow: hidden; border: 1px solid var(--line); }
 .explain > div { background: var(--s1); padding: 22px 24px; display: grid; gap: 10px; align-content: start; }
 .explain h3 { font-size: 13px; font-weight: 300; font-variation-settings: 'wdth' 125; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t1); }
@@ -449,6 +455,7 @@ canvas.boundary { width: 100%; aspect-ratio: 1; border-radius: 14px; display: bl
   .explain { grid-template-columns: 1fr; }
   .step-flow { grid-template-columns: 1fr 1fr; }
   .pad-wrap { grid-template-columns: 1fr; }
+  .lab-grid { grid-template-columns: 1fr; }
   .pad-side { grid-auto-flow: column; align-items: end; }
   .inspector { left: 16px; right: 16px; width: auto; }
   .stage-card { position: relative; top: 0; height: 440px; }
