@@ -42,22 +42,32 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
   let pending: SavedModel = saved;
   let pick: ((layer: number, unit: number) => void) | null = null;
   let disposed = false;
+  let curArch = arch;
   host.classList.add('loading3d');
-  loadMod()
-    .then((m) => {
-      if (disposed) return;
-      host.classList.remove('loading3d');
-      if (!m.webglAvailable()) throw new Error('sem webgl');
-      net3d = new m.Net3D(pending);
-      net3d.onPick = pick;
-      host.appendChild(net3d.el);
-    })
-    .catch(() => {
-      if (disposed) return;
-      host.classList.remove('loading3d');
-      flat = new NetView(arch as never, pending);
-      host.appendChild(flat.el);
-    });
+  // só baixa o three.js quando a vista aparece: escondida (ex.: 2D escolhido no celular), não custa nada
+  const start = () =>
+    loadMod()
+      .then((m) => {
+        if (disposed) return;
+        host.classList.remove('loading3d');
+        if (!m.webglAvailable()) throw new Error('sem webgl');
+        net3d = new m.Net3D(pending);
+        net3d.onPick = pick;
+        host.appendChild(net3d.el);
+      })
+      .catch(() => {
+        if (disposed) return;
+        host.classList.remove('loading3d');
+        flat = new NetView(curArch as never, pending);
+        flat.onPick = pick;
+        host.appendChild(flat.el);
+      });
+  const ro = new ResizeObserver((entries) => {
+    if (disposed || !entries.some((e) => e.contentRect.width > 0)) return;
+    ro.disconnect();
+    void start();
+  });
+  ro.observe(host);
   return {
     setWeights(m) {
       pending = m;
@@ -74,6 +84,7 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
     },
     rebuild(m, arch2) {
       pending = m;
+      curArch = arch2;
       if (net3d) net3d.rebuild(m);
       else if (flat) {
         const next = new NetView(arch2 as never, m);
@@ -89,6 +100,7 @@ export function mountNet(host: HTMLElement, saved: SavedModel, arch: { inputs: n
     },
     dispose() {
       disposed = true;
+      ro.disconnect();
       net3d?.dispose();
     },
   };

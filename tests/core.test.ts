@@ -192,6 +192,13 @@ describe('datasets', () => {
     expect(parseCSV('a,b\n1.5,2\n').rows[0]).toEqual([1.5, 2]);
   });
 
+  it('lê ponto de milhar do Excel em português quando o separador é ;', () => {
+    const t = parseCSV('renda;idade\n1.234,5;30\n12.345.678;41\n1.5;2,25\n');
+    expect(t.rows[0][0]).toBeCloseTo(1234.5);
+    expect(t.rows[1][0]).toBe(12345678);
+    expect(t.rows[2]).toEqual([1.5, 2.25]); // um ponto só, sem vírgula: é decimal
+  });
+
   it('acusa linha com texto ou colunas a mais', () => {
     expect(() => parseCSV('a,b\n1,2\n3,x\n')).toThrow(/"x" não é um número/);
     expect(() => parseCSV('a,b\n1,2\n3,4,5\n')).toThrow(/3 colunas/);

@@ -43,8 +43,15 @@ export class MseChart {
       this.el.appendChild(t);
       return;
     }
-    let lo = Math.floor(Math.log10(Math.min(...vals)));
-    let hi = Math.ceil(Math.log10(Math.max(...vals)));
+    // laço em vez de Math.min(...vals): com muitas épocas, espalhar a lista estoura a pilha
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const v of vals) {
+      if (v < vMin) vMin = v;
+      if (v > vMax) vMax = v;
+    }
+    let lo = Math.floor(Math.log10(vMin));
+    let hi = Math.ceil(Math.log10(vMax));
     if (hi === lo) hi = lo + 1;
     if (hi - lo > 8) lo = hi - 8;
     const y = (v: number) => {

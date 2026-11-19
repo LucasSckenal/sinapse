@@ -31,10 +31,16 @@ const VIEW_KEY = 'sinapse.vista';
 function savedView(): View {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    return v === 'plano' || v === 'superficie' ? v : 'rede';
+    if (v === 'rede' || v === 'plano' || v === 'superficie') return v;
   } catch {
-    return 'rede';
+    /* sem armazenamento: decide pela tela */
   }
+  return defaultView();
+}
+
+/** Sem escolha salva, tela pequena começa no 2D: não baixa o three.js nem força a placa de vídeo do celular. */
+function defaultView(): View {
+  return matchMedia('(max-width: 700px)').matches ? 'plano' : 'rede';
 }
 
 /**

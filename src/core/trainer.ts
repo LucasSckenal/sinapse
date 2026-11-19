@@ -33,7 +33,11 @@ export function validateTrainOptions(o: TrainOptions): void {
   if (!(o.learningRate > 0) || !Number.isFinite(o.learningRate))
     throw new Error('A taxa de aprendizado precisa ser um número maior que 0.');
   if (!Number.isInteger(o.epochs) || o.epochs < 1) throw new Error('O número de épocas precisa ser inteiro e maior que 0.');
+  if (o.epochs > MAX_EPOCHS) throw new Error(`O máximo é ${MAX_EPOCHS.toLocaleString('pt-BR')} épocas.`);
 }
+
+/** Acima disso o histórico fica grande demais para o gráfico acompanhar. */
+export const MAX_EPOCHS = 100_000;
 
 /** Treina passo a passo: cada chamada de `step()` roda uma época. Permite pausar e acompanhar. */
 export class Trainer {

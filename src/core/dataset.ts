@@ -60,11 +60,18 @@ function detectSeparator(lines: string[]): string {
   return best;
 }
 
-/** Número com ponto, ou com vírgula decimal quando o separador não é a vírgula (5,1 → 5.1). */
+/**
+ * Número com ponto, ou com vírgula decimal quando o separador não é a vírgula (5,1 → 5.1).
+ * Nesse caso também aceita ponto de milhar do Excel em português (1.234,5 → 1234.5; 1.234.567 → 1234567).
+ * "1.234" sozinho continua sendo 1,234: sem vírgula e com um só ponto, não dá para saber que é milhar.
+ */
 function toNumber(cell: string, sep = ','): number {
   let c = cell.trim();
   if (c === '') return NaN;
-  if (sep !== ',' && /^[+-]?\d*,\d+(e[+-]?\d+)?$/i.test(c)) c = c.replace(',', '.');
+  if (sep !== ',') {
+    if (/^[+-]?\d{1,3}(\.\d{3})+,\d+(e[+-]?\d+)?$/i.test(c) || /^[+-]?\d{1,3}(\.\d{3}){2,}$/.test(c)) c = c.replace(/\./g, '');
+    if (/^[+-]?\d*,\d+(e[+-]?\d+)?$/i.test(c)) c = c.replace(',', '.');
+  }
   return Number(c);
 }
 
