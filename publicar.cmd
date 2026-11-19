@@ -9,4 +9,5 @@ if exist "%DEST%" rmdir /s /q "%DEST%"
 robocopy "%~dp0dist" "%DEST%" /e /nfl /ndl /njh /njs >nul
 if exist "%TEMP%\sinapse-mlp-vercel" (robocopy "%TEMP%\sinapse-mlp-vercel" "%DEST%\.vercel" /e >nul)
 cd /d "%DEST%"
-call npx.cmd --yes vercel@latest deploy --prod --yes
+rem versao fixa: uma versao nova da Vercel nao quebra a publicacao de surpresa (o vercel.json com os cabecalhos vem do public)
+call npx.cmd --yes vercel@65.12.1 deploy --prod --yes

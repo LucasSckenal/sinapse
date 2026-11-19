@@ -40,9 +40,16 @@ export function loadTable(table: Table, fileName: string): void {
   syncArchWithData();
 }
 
+const MAX_CSV_MB = 20;
+
 async function readFile(file: File): Promise<void> {
   if (!/\.(csv|txt)$/i.test(file.name)) {
     toast('Escolha um arquivo .csv.', 'err');
+    return;
+  }
+  // a leitura e o treino rodam no navegador: um arquivo enorme travaria a página
+  if (file.size > MAX_CSV_MB * 1024 * 1024) {
+    toast(`O arquivo tem ${Math.round(file.size / 1024 / 1024)} MB; o máximo é ${MAX_CSV_MB} MB. Use uma amostra das linhas.`, 'err');
     return;
   }
   try {

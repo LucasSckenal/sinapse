@@ -534,7 +534,9 @@ function runsCard(): HTMLElement | null {
     const v = c.filter((x) => Number.isFinite(x) && x > 0);
     if (v.length < 2) return h('span');
     const lo = Math.log10(Math.min(...v));
-    const hi = Math.log10(Math.max(...v)) || lo + 1;
+    // curva toda igual: abre uma década para não dividir por zero (antes, max = 1 dava log 0 e caía aqui por engano)
+    let hi = Math.log10(Math.max(...v));
+    if (hi === lo) hi = lo + 1;
     const pts = v.map((x, i) => `${((i / (v.length - 1)) * 80).toFixed(1)},${(2 + (1 - (Math.log10(x) - lo) / Math.max(1e-9, hi - lo)) * 18).toFixed(1)}`).join(' ');
     const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     el.setAttribute('viewBox', '0 0 80 22');

@@ -229,11 +229,26 @@ abstract class Stage {
     if (!document.hidden) this.loop();
   };
 
+  /** Faixa de baixo (px) coberta por legenda: a cena se centra e se encaixa acima dela. Vem de --stage-inset no CSS. */
+  private inset = 0;
+  private viewH = 1;
+
   private resize(): void {
     const w = this.el.clientWidth || 1;
     const h = this.el.clientHeight || 1;
+    const css = parseFloat(getComputedStyle(this.el).getPropertyValue('--stage-inset')) || 0;
+    this.inset = h > css * 4 ? css : 0; // palco baixo demais: ignora para não espremer a rede
+    this.viewH = h;
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
+    if (this.inset) {
+      // câmera de um quadro mais alto, mostrando só a parte de baixo dele: o centro sobe inset/2
+      const full = h + this.inset;
+      this.camera.aspect = w / full;
+      this.camera.setViewOffset(w, full, 0, this.inset, w, h);
+    } else {
+      this.camera.aspect = w / h;
+      this.camera.clearViewOffset();
+    }
     this.camera.updateProjectionMatrix();
     this.fit();
     this.render();
@@ -243,7 +258,9 @@ abstract class Stage {
     if (!this.fitBox || this.userZoom) return;
     const v = THREE.MathUtils.degToRad(this.camera.fov) / 2;
     const hz = Math.atan(Math.tan(v) * this.camera.aspect);
-    this.dist = Math.max(this.fitBox.w / Math.tan(hz), this.fitBox.h / Math.tan(v)) * 1.02 + 0.6;
+    // o fov vertical cobre h + inset px, mas a rede tem que caber em h − inset
+    const squeeze = this.inset ? (this.viewH + this.inset) / (this.viewH - this.inset) : 1;
+    this.dist = Math.max(this.fitBox.w / Math.tan(hz), (this.fitBox.h * squeeze) / Math.tan(v)) * 1.02 + 0.6;
   }
 
   protected abstract tick(dt: number): void;

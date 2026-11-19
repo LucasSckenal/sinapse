@@ -404,7 +404,7 @@ body.presenting main { padding-bottom: 160px; }
 .train-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; position: relative; z-index: 1; }
 .stage-card { position: sticky; top: 24px; height: clamp(460px, calc(100dvh - 260px), 720px); padding: 20px; overflow: hidden; }
-.stage-host { position: relative; flex: 1; min-height: 0; margin: -8px -20px -20px; }
+.stage-host { position: relative; flex: 1; min-height: 0; margin: -8px -20px -20px; --stage-inset: 56px; /* legenda e botões de câmera embaixo: o 3D se encaixa acima */ }
 .stage-host.loading3d::after { content: ''; position: absolute; inset: 0; margin: auto; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line2); border-top-color: var(--t1); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .stage3d { position: absolute; inset: 0; cursor: grab; animation: fadeIn 0.6s var(--ease); touch-action: none; }
