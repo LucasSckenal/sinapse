@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVATIONS, ACTIVATION_NAMES } from '../src/core/activations';
-import { checkCompatibility, codingsFor, parseCSV, selectColumns, selectionWidths, splitDataset } from '../src/core/dataset';
+import { checkCompatibility, codingsFor, numericFlags, parseCSV, selectColumns, selectionWidths, splitDataset } from '../src/core/dataset';
 import { accuracy, confusionMatrix, decode, type ColumnCoding } from '../src/core/encoding';
 import { initFor, initStd } from '../src/core/initialization';
-import { mse } from '../src/core/loss';
+import { mse, mseOriginal } from '../src/core/loss';
 import { Network, withBlocks, type Architecture } from '../src/core/network';
-import { fitNormalization } from '../src/core/normalization';
+import { fitNormalization, fitOutputScaling, scaleTargets, unscaleOutputs } from '../src/core/normalization';
 import { fromJSON, toJSON } from '../src/core/persistence';
 import { predict, predictColumns } from '../src/core/predict';
 import { Random } from '../src/core/random';
@@ -413,5 +413,69 @@ describe('matriz de confusão', () => {
     expect(bin.labels).toEqual(['1', '0']);
     expect(bin.m).toEqual([[1, 0], [1, 1]]);
     expect(confusionMatrix([[0.3]], [[0.37]], undefined)).toBeUndefined();
+  });
+});
+
+describe('normalização das saídas', () => {
+  it('leva cada saída numérica para a faixa da ativação e volta igual; classe passa sem mudar', () => {
+    const tr = [[100, 1, 0], [500, 0, 1], [300, 1, 0]];
+    const sig = fitOutputScaling(tr, [true, false, false], ['sigmoid', 'sigmoid', 'sigmoid'])!;
+    expect(scaleTargets(sig, [100, 1, 0])).toEqual([0, 1, 0]);
+    expect(scaleTargets(sig, [500, 0, 1])).toEqual([1, 0, 1]);
+    expect(unscaleOutputs(sig, scaleTargets(sig, [250, 0.3, 0.7]))).toEqual([250, 0.3, 0.7]);
+    const th = fitOutputScaling([[10], [30]], [true], ['tanh'])!;
+    expect(scaleTargets(th, [10])[0]).toBe(-1);
+    expect(scaleTargets(th, [20])[0]).toBe(0);
+    expect(fitOutputScaling(tr, [false, false, false], ['sigmoid', 'sigmoid', 'sigmoid'])).toBeNull();
+  });
+
+  it('a divisão normaliza as saídas só com o treino; "Nenhuma" deixa como está', () => {
+    const t = parseCSV('x;y\n' + Array.from({ length: 40 }, (_, i) => `${i};${100 + i * 10}`).join('\n'));
+    const samples = selectColumns(t, { inputs: [0], outputs: [1] });
+    const plan = { numeric: numericFlags(codingsFor(t, [1])), activations: ['sigmoid'] };
+    const s = splitDataset(samples, { treino: 70, validacao: 15, teste: 15 }, 3, 'minmax', plan);
+    const ys = s.treino.targets.map((r) => r[0]);
+    expect(Math.min(...ys)).toBe(0);
+    expect(Math.max(...ys)).toBe(1);
+    expect(s.saidas!.min[0]).toBe(Math.min(...s.treino.targets.map((r) => unscaleOutputs(s.saidas, r)[0])));
+    const crua = splitDataset(samples, { treino: 70, validacao: 15, teste: 15 }, 3, 'nenhuma', plan);
+    expect(crua.saidas).toBeNull();
+    expect(Math.max(...crua.treino.targets.map((r) => r[0]))).toBeGreaterThan(100);
+  });
+
+  it('com saída sigmoid e alvo de 100 a 500, só aprende com as saídas normalizadas', () => {
+    const rows = Array.from({ length: 60 }, (_, i) => `${(i / 59).toFixed(4)};${(100 + 400 * (i / 59)).toFixed(2)}`);
+    const t = parseCSV('x;preco\n' + rows.join('\n'));
+    const samples = selectColumns(t, { inputs: [0], outputs: [1] });
+    const a: Architecture = { inputs: 1, layers: [{ neurons: 8, activation: 'tanh' }, { neurons: 1, activation: 'sigmoid' }] };
+    const plan = { numeric: [true], activations: ['sigmoid'] };
+    const run = (norm: 'minmax' | 'nenhuma') => {
+      const s = splitDataset(samples, { treino: 80, validacao: 10, teste: 10 }, 5, norm, plan);
+      const net = Network.create(a, 7);
+      new Trainer(net, s.treino, s.validacao, { learningRate: 0.2, epochs: 400, seed: 2 }).run();
+      return { s, net, erro: mseOriginal(net, s.teste.inputs, s.teste.targets, s.saidas) };
+    };
+    const com = run('minmax');
+    const sem = run('nenhuma');
+    expect(com.erro).toBeLessThan(400); // erro médio de ~20 numa faixa de 400
+    expect(sem.erro).toBeGreaterThan(50000); // a sigmoid não passa de 1: erra quase tudo
+    // a previsão volta na unidade do arquivo, também depois de salvar e abrir
+    const model = { net: com.net, normalization: com.s.normalizacao, outputScaling: com.s.saidas };
+    const loaded = fromJSON(toJSON(model));
+    const p = predict(loaded, [0.5])[0];
+    expect(p).toBeGreaterThan(250);
+    expect(p).toBeLessThan(350);
+    expect(p).toBeCloseTo(predict(model, [0.5])[0], 12);
+  });
+
+  it('rede salva antes disso (sem normalizacaoSaidas) abre e prevê como antes', () => {
+    const model = { net: Network.create(arch, 9), normalization: null };
+    const json = JSON.parse(toJSON(model));
+    expect(json.normalizacaoSaidas).toBeUndefined();
+    const loaded = fromJSON(JSON.stringify(json));
+    expect(loaded.outputScaling).toBeNull();
+    expect(predict(loaded, [0.1, 0.2, 0.3])).toEqual(model.net.forward([0.1, 0.2, 0.3]));
+    const bad = { ...json, normalizacaoSaidas: { min: [0], max: [1], lo: [0], hi: [1] } };
+    expect(() => fromJSON(JSON.stringify(bad))).toThrow(/normalização das saídas/);
   });
 });

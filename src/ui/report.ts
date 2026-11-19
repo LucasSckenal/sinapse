@@ -1,6 +1,6 @@
 import { blocksOf } from '../core/network';
 import { confusionMatrix } from '../core/encoding';
-import { NORMALIZATION_LABELS } from '../core/normalization';
+import { NORMALIZATION_LABELS, describeOutputScaling } from '../core/normalization';
 import { serialize } from '../core/persistence';
 import { fmt } from './dom';
 import { NetView } from './netview';
@@ -100,7 +100,8 @@ code { font-family: 'JetBrains Mono', monospace; font-size: 9pt; background: #f2
 <div class="nums">
 <div><span>MSE treino</span><b>${fmt(at?.trainMSE)}</b></div>
 <div><span>MSE validação</span><b>${fmt(at?.valMSE)}</b></div>
-<div><span>MSE teste</span><b>${fmt(state.testMSE)}</b></div>
+<div><span>MSE teste</span><b>${fmt(state.testMSE)}</b></div>${state.testMSEOriginal !== undefined ? `
+<div><span>MSE teste (unidade do arquivo)</span><b>${fmt(state.testMSEOriginal)}</b></div>` : ''}
 <div><span>Acerto no teste</span><b>${pct(state.testAccuracy)}</b></div>
 </div>
 <p class="sub">${state.history.length} épocas feitas${state.bestEpoch ? ` · pesos da época ${state.bestEpoch} (melhor validação${state.earlyStopped ? ', parada antecipada' : ''})` : ''}.</p>
@@ -114,7 +115,8 @@ ${cmHtml}
 <h2>Dados e divisão</h2>
 <table><tr><th>coluna</th><th>papel</th><th>tipo</th></tr>${cols}</table>
 <p>${t?.rows.length ?? 0} linhas embaralhadas (Fisher-Yates) com a semente <code>${state.splitSeed}</code>: <b>${a}</b> de treino (${state.percent.treino}%), <b>${b}</b> de validação (${state.percent.validacao}%), <b>${c}</b> de teste (${state.percent.teste}%).</p>
-<p>Normalização das entradas (${NORMALIZATION_LABELS[state.normalization]}): ${normTxt} As saídas não são normalizadas.</p>
+<p>Normalização das entradas (${NORMALIZATION_LABELS[state.normalization]}): ${normTxt}</p>
+<p>Normalização das saídas: ${esc(describeOutputScaling(m.outputScaling, m.columns?.saidas)) || (state.normalization === 'nenhuma' ? 'nenhuma.' : 'não se aplica (saídas de classe, em one-hot 0 e 1).')}${m.outputScaling ? '. Min-Max com parâmetros do treino, para a faixa da ativação de saída; a previsão desfaz a conta.' : ''}</p>
 
 <h2>Treinamento</h2>
 <p>SGD: a cada época os exemplos de treino são embaralhados (semente <code>${state.trainSeed}</code>) e passam um de cada vez — propagação, erro, retropropagação e ajuste. Taxa <code>η = ${String(state.learningRate).replace('.', ',')}</code>, ${state.epochs} épocas${state.patience ? `, parada antecipada com paciência ${state.patience}` : ''}.</p>

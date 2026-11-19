@@ -1,6 +1,6 @@
 import { encode, expandedNames, totalWidth, type ColumnCoding } from './encoding';
 import type { Architecture } from './network';
-import { fitNormalization, normalizeRows, type Normalization, type NormalizationName } from './normalization';
+import { fitNormalization, fitOutputScaling, normalizeRows, scaleTargets, type Normalization, type NormalizationName, type OutputScaling } from './normalization';
 import { Random } from './random';
 
 /**
@@ -177,6 +177,19 @@ export interface Split {
   validacao: Samples;
   teste: Samples;
   normalizacao: Normalization | null;
+  /** Normalização das saídas numéricas (null = saídas como no arquivo). */
+  saidas: OutputScaling | null;
+}
+
+/** Como normalizar as saídas: quais posições são número e a ativação de cada neurônio de saída. */
+export interface OutputPlan {
+  numeric: boolean[];
+  activations: string[];
+}
+
+/** Posições de saída que são número (true) ou parte de um one-hot de classe (false). */
+export function numericFlags(codings: readonly ColumnCoding[]): boolean[] {
+  return codings.flatMap((c) => (c.tipo === 'classe' ? c.classes.map(() => false) : [true]));
 }
 
 export function validatePercent(p: SplitPercent): void {
@@ -196,13 +209,15 @@ export function splitSizes(n: number, p: SplitPercent): [number, number, number]
 
 /**
  * Divide aleatoriamente (com semente) em treino, validação e teste e, depois da divisão,
- * normaliza as entradas com parâmetros calculados só no treino.
+ * normaliza as entradas com parâmetros calculados só no treino. Com `outputs`, normaliza também
+ * as saídas numéricas (também só pelo treino); colunas de classe continuam em one-hot.
  */
 export function splitDataset(
   samples: Samples,
   percent: SplitPercent,
   seed: number,
   normalization: NormalizationName,
+  outputs?: OutputPlan,
 ): Split {
   validatePercent(percent);
   const n = samples.inputs.length;
@@ -218,7 +233,10 @@ export function splitDataset(
   const teste = pick(idx.slice(a + b));
   const normalizacao = fitNormalization(normalization, treino.inputs);
   for (const s of [treino, validacao, teste]) s.inputs = normalizeRows(normalizacao, s.inputs);
-  return { treino, validacao, teste, normalizacao };
+  // saídas numéricas: Min-Max para a faixa da ativação de saída (sigmoid 0 a 1, tanh -1 a 1), também só pelo treino
+  const saidas = normalization !== 'nenhuma' && outputs ? fitOutputScaling(treino.targets, outputs.numeric, outputs.activations) : null;
+  if (saidas) for (const s of [treino, validacao, teste]) s.targets = s.targets.map((t) => scaleTargets(saidas, t));
+  return { treino, validacao, teste, normalizacao, saidas };
 }
 
 /** Nomes e codificação das colunas escolhidas, guardados junto com a rede. */

@@ -168,7 +168,10 @@ tela não travar.
 - **Divisão:** embaralhamento Fisher-Yates com semente. Os tamanhos são arredondados para manter o total de linhas.
 - **Normalização:** feita depois da divisão, com os parâmetros calculados só no treino e aplicados aos três conjuntos e às
   entradas da previsão. Min-Max: (x − mín) / (máx − mín). Z-score: (x − média) / desvio (desvio populacional). Coluna
-  constante vira 0. As saídas esperadas nunca são normalizadas.
+  constante vira 0. As saídas numéricas também são normalizadas (com Min-Max ou Z-score escolhido; com *Nenhuma*, não):
+  Min-Max pelo treino para a faixa da ativação de saída — Sigmoid, Linear e ReLU de 0 a 1, Tanh de −1 a 1. A previsão
+  desfaz a conta e mostra o valor na unidade do arquivo; o Treino mostra o MSE do teste também nessa unidade. Saídas de
+  classe já são 0 e 1 (one-hot) e passam sem mudar.
 - **Compatibilidade:** o número de colunas de entrada precisa ser igual ao de entradas da rede, e o de colunas de saída igual
   ao de neurônios da última camada. Sem isso, o treino fica bloqueado com a explicação na tela.
 
@@ -209,6 +212,7 @@ tela não travar.
 | `camadas[].pesos[i][j]` | peso do neurônio *i* para a entrada *j* da camada |
 | `camadas[].vieses[i]` | viés do neurônio *i* |
 | `normalizacao` | `null`, `{ "tipo": "minmax", "min": [...], "max": [...] }` ou `{ "tipo": "zscore", "media": [...], "desvio": [...] }`, um valor por entrada, calculados no treino |
+| `normalizacaoSaidas` | opcional: `{ "min": [...], "max": [...], "lo": [...], "hi": [...] }`, um valor por saída; cada saída vai de [min, max] do treino para [lo, hi] da ativação. Ausente em redes salvas antes: saídas como no arquivo |
 | `colunas` | opcional: nomes das posições, só para a tela rotular os campos |
 | `camadas[].blocos` | opcional: blocos em paralelo, na ordem dos neurônios, cada um `{ "neuronios", "ativacao", "origem"? }`; `origem` = índices das entradas (1ª camada) ou dos blocos da camada anterior; sem `origem`, o bloco recebe de tudo. Num bloco com origem, `pesos[i]` tem um peso por saída de origem, em ordem |
 | `codificacao` | opcional: como cada coluna do CSV virou números, `{ "entradas": [...], "saidas": [...] }`, cada item `{ "nome", "tipo": "numero" }` ou `{ "nome", "tipo": "classe", "classes": [...] }`; uma coluna de classe ocupa uma posição por classe, na ordem da lista |

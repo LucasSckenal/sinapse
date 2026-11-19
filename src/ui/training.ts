@@ -1,4 +1,4 @@
-import { checkCompatibility, modelMeta, selectColumns, splitDataset, validatePercent, type Split } from '../core/dataset';
+import { checkCompatibility, codingsFor, modelMeta, numericFlags, selectColumns, splitDataset, validatePercent, type OutputPlan, type Split } from '../core/dataset';
 import { deserialize, serialize, type SavedModel } from '../core/persistence';
 import { validateTrainOptions } from '../core/trainer';
 import type { FromWorker, ToWorker, WeightRef } from '../train.worker';
@@ -135,7 +135,7 @@ function getWorker(): Worker {
       recordTrack(msg.model);
       const runs = [makeRun(msg.testMSE, msg.testAccuracy, msg.bestEpoch), ...state.runs].slice(0, 30);
       saveRuns(runs);
-      set({ model, modelTrained: true, status: 'fim', testMSE: msg.testMSE, testAccuracy: msg.testAccuracy, bestEpoch: msg.bestEpoch, earlyStopped: msg.earlyStopped, runs });
+      set({ model, modelTrained: true, status: 'fim', testMSE: msg.testMSE, testMSEOriginal: msg.testMSEOriginal, testAccuracy: msg.testAccuracy, bestEpoch: msg.bestEpoch, earlyStopped: msg.earlyStopped, runs });
       progressListeners.forEach((l) => l(msg.model));
       toast(
         msg.earlyStopped
@@ -152,6 +152,16 @@ function getWorker(): Worker {
   };
   worker.onerror = (e) => set({ status: 'erro', trainError: e.message || 'O treino parou com um erro inesperado.' });
   return worker;
+}
+
+/** Quais saídas são número (normalizam) e a ativação de cada neurônio de saída da rede atual. */
+function outputPlan(): OutputPlan | undefined {
+  if (!state.model || !state.table) return undefined;
+  const last = state.model.net.layers[state.model.net.layers.length - 1];
+  return {
+    numeric: numericFlags(codingsFor(state.table, state.selection.outputs)),
+    activations: last.neurons.map((n) => n.activation.name),
+  };
 }
 
 /** Problemas que impedem começar o treino (lista vazia = pode treinar). */
@@ -178,13 +188,14 @@ export function startTraining(): void {
   }
   try {
     const samples = selectColumns(state.table, state.selection);
-    const split = splitDataset(samples, state.percent, state.splitSeed, state.normalization);
+    const split = splitDataset(samples, state.percent, state.splitSeed, state.normalization, outputPlan());
     const t = state.table;
-    const model = serialize({ net: state.model.net, normalization: split.normalizacao, ...modelMeta(t, state.selection) });
+    const model = serialize({ net: state.model.net, normalization: split.normalizacao, outputScaling: split.saidas, ...modelMeta(t, state.selection) });
     set({
       status: 'rodando',
       history: [],
       testMSE: undefined,
+      testMSEOriginal: undefined,
       testAccuracy: undefined,
       trainError: '',
       splitCounts: [split.treino.inputs.length, split.validacao.inputs.length, split.teste.inputs.length],
@@ -241,9 +252,10 @@ export function ensureSplit(): string | null {
   const blockers = trainBlockers();
   if (blockers.length || !state.model || !state.table) return blockers[0] ?? 'Sem rede ou sem dados.';
   try {
-    const split = splitDataset(selectColumns(state.table, state.selection), state.percent, state.splitSeed, state.normalization);
+    const split = splitDataset(selectColumns(state.table, state.selection), state.percent, state.splitSeed, state.normalization, outputPlan());
     currentSplit = split;
     state.model.normalization = split.normalizacao;
+    state.model.outputScaling = split.saidas;
     Object.assign(state.model, modelMeta(state.table, state.selection));
     state.splitCounts = [split.treino.inputs.length, split.validacao.inputs.length, split.teste.inputs.length];
     stepOrder = [];

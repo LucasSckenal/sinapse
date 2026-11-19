@@ -6,7 +6,7 @@
  */
 import type { Split } from './core/dataset';
 import { accuracy } from './core/encoding';
-import { mse } from './core/loss';
+import { mse, mseOriginal } from './core/loss';
 import { deserialize, serialize, type SavedModel } from './core/persistence';
 import { Trainer, type EpochResult, type TrainOptions } from './core/trainer';
 
@@ -26,7 +26,7 @@ export interface WeightRef {
 
 export type FromWorker =
   | { type: 'epochs'; results: EpochResult[]; snapshot?: SavedModel }
-  | { type: 'done'; model: SavedModel; testMSE: number; testAccuracy?: number; stopped: boolean; earlyStopped: boolean; bestEpoch: number; restored: boolean }
+  | { type: 'done'; model: SavedModel; testMSE: number; testMSEOriginal?: number; testAccuracy?: number; stopped: boolean; earlyStopped: boolean; bestEpoch: number; restored: boolean }
   | { type: 'error'; message: string }
   | { type: 'surface'; id: number; z: number[][] };
 
@@ -36,6 +36,7 @@ let trainer: Trainer | null = null;
 let lastNet: Trainer['net'] | null = null;
 let split: Split | null = null;
 let normalization: SavedModel['normalizacao'] = null;
+let outputScaling: Split['saidas'] = null;
 let columns: SavedModel['colunas'];
 let codings: SavedModel['codificacao'];
 
@@ -52,9 +53,11 @@ function finish(): void {
   // com a parada antecipada ligada, a rede volta para a melhor época da validação
   const restored = (trainer.options.patience ?? 0) > 0 ? trainer.restoreBest() : false;
   const testMSE = mse(trainer.net, split.teste.inputs, split.teste.targets);
+  // com as saídas normalizadas, o mesmo erro na unidade do arquivo (para ler o resultado)
+  const testMSEOriginal = outputScaling ? mseOriginal(trainer.net, split.teste.inputs, split.teste.targets, outputScaling) : undefined;
   const testAccuracy = acc(split.teste);
-  const model = serialize({ net: trainer.net, normalization, columns, codings });
-  ctx.postMessage({ type: 'done', model, testMSE, testAccuracy, stopped, earlyStopped: trainer.stoppedEarly, bestEpoch: trainer.bestEpoch, restored } satisfies FromWorker);
+  const model = serialize({ net: trainer.net, normalization, outputScaling, columns, codings });
+  ctx.postMessage({ type: 'done', model, testMSE, testMSEOriginal, testAccuracy, stopped, earlyStopped: trainer.stoppedEarly, bestEpoch: trainer.bestEpoch, restored } satisfies FromWorker);
   lastNet = trainer.net;
   trainer = null;
 }
@@ -70,7 +73,7 @@ function loop(): void {
       results.push({ ...r, valAccuracy: split ? acc(split.validacao) : undefined });
     }
     const now = performance.now();
-    const snapshot = now - lastSnapshot > 120 ? serialize({ net: trainer.net, normalization, columns, codings }) : undefined;
+    const snapshot = now - lastSnapshot > 120 ? serialize({ net: trainer.net, normalization, outputScaling, columns, codings }) : undefined;
     if (snapshot) lastSnapshot = now;
     if (results.length || snapshot) ctx.postMessage({ type: 'epochs', results, snapshot } satisfies FromWorker);
     if (trainer.done || stopped) finish();
@@ -88,6 +91,7 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
       const model = deserialize(msg.model);
       split = msg.split;
       normalization = msg.split.normalizacao;
+      outputScaling = msg.split.saidas ?? null;
       columns = msg.model.colunas;
       codings = msg.model.codificacao;
       trainer = new Trainer(model.net, split.treino, split.validacao, msg.options);

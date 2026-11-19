@@ -1,6 +1,6 @@
 import { selectColumns, splitSizes } from '../../core/dataset';
 import { confusionMatrix } from '../../core/encoding';
-import { NORMALIZATION_LABELS, normalizeRows } from '../../core/normalization';
+import { NORMALIZATION_LABELS, describeOutputScaling, normalizeRows, scaleTargets } from '../../core/normalization';
 import { deserialize, serialize, type SavedModel } from '../../core/persistence';
 import { Boundary, boundaryKind } from '../boundary';
 import { MseChart } from '../chart';
@@ -111,6 +111,8 @@ export function treinoScreen(): HTMLElement {
   const trainEl = h('b', { class: 'mono' });
   const valEl = h('b', { class: 'mono' });
   const testEl = h('b', { class: 'mono' });
+  // com as saídas normalizadas, o MSE acima está na escala da rede; este é o mesmo erro na unidade do CSV
+  const testOrigEl = h('small', { class: 'mono stat-orig' });
   const accEl = h('span', { class: 'acc mono' });
   const stopInfo = h('p', { class: 'stop-info' });
   const bar = h('span');
@@ -140,7 +142,7 @@ export function treinoScreen(): HTMLElement {
     try {
       if (!state.table || !compatible) return null;
       const s = selectColumns(state.table, state.selection);
-      idleSamples = { inputs: normalizeRows(liveModel.normalization, s.inputs), targets: s.targets };
+      idleSamples = { inputs: normalizeRows(liveModel.normalization, s.inputs), targets: s.targets.map((x) => scaleTargets(liveModel.outputScaling, x)) };
       return idleSamples;
     } catch {
       return null;
@@ -193,6 +195,7 @@ export function treinoScreen(): HTMLElement {
     valEl.textContent = fmt(last?.valMSE);
     testEl.textContent = fmt(state.testMSE);
     testEl.style.color = state.testMSE === undefined ? 'var(--t3)' : '';
+    testOrigEl.textContent = state.testMSEOriginal !== undefined ? `${fmt(state.testMSEOriginal)} na unidade do arquivo` : '';
     const va = last?.valAccuracy;
     const ta = state.testAccuracy;
     const pctTxt = (x: number) => `${(x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -397,7 +400,7 @@ export function treinoScreen(): HTMLElement {
             { class: 'stats' },
             h('div', null, h('span', { class: 'lbl wide' }, 'Treino'), trainEl),
             h('div', null, h('span', { class: 'lbl wide' }, 'Validação'), valEl),
-            h('div', null, h('span', { class: 'lbl wide' }, 'Teste'), testEl),
+            h('div', null, h('span', { class: 'lbl wide' }, 'Teste'), testEl, testOrigEl),
           ),
           h('div', { class: 'stat-foot' }, accEl, counts ? h('span', { class: 'counts mono' }, `${counts[0]} · ${counts[1]} · ${counts[2]} exemplos`) : null),
           stopInfo,
@@ -437,10 +440,17 @@ function explainCard(): HTMLElement {
   const [a, b, c] = state.splitCounts ?? splitSizes(n, p);
   const pct = (x: number) => `${String(x).replace('.', ',')}%`;
   const norm = state.normalization;
+  const outTxt = () => {
+    const d = describeOutputScaling(state.model?.outputScaling, state.model?.columns?.saidas);
+    if (d) return `Saídas numéricas: Min-Max também só pelo treino, para a faixa da ativação de saída (${d}); a previsão desfaz a conta e mostra na unidade do arquivo.`;
+    return state.model?.codings?.saidas.some((c) => c.tipo === 'numero')
+      ? 'Saídas numéricas: Min-Max só pelo treino, para a faixa da ativação de saída (sigmoid 0 a 1, tanh −1 a 1); a previsão desfaz a conta.'
+      : 'Saídas de classe já ficam em 0 e 1 (one-hot), sem normalizar.';
+  };
   const normTxt =
     norm === 'nenhuma'
-      ? 'Sem normalização: as entradas entram como estão no arquivo.'
-      : `${NORMALIZATION_LABELS[norm]} calculado só com o conjunto de treino (${norm === 'minmax' ? 'mínimo e máximo' : 'média e desvio-padrão'} de cada entrada) e aplicado aos três conjuntos e à previsão. As saídas não são normalizadas.`;
+      ? 'Sem normalização: entradas e saídas entram como estão no arquivo.'
+      : `Entradas: ${NORMALIZATION_LABELS[norm]} calculado só com o conjunto de treino (${norm === 'minmax' ? 'mínimo e máximo' : 'média e desvio-padrão'} de cada entrada) e aplicado aos três conjuntos e à previsão. ${outTxt()}`;
   const lr = String(state.learningRate).replace('.', ',');
   const done = state.history.length;
   const ajustes = done * a;

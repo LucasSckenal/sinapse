@@ -244,14 +244,14 @@ function splitCard(table: Table): HTMLElement {
         },
       }),
     ),
-    h('div', { class: 'lbl wide', style: 'margin-top:6px' }, 'Normalização das entradas'),
+    h('div', { class: 'lbl wide', style: 'margin-top:6px' }, 'Normalização'),
     segmented<NormalizationName>(
       (Object.keys(NORMALIZATION_LABELS) as NormalizationName[]).map((v) => ({ value: v, label: NORMALIZATION_LABELS[v] })),
       state.normalization,
       (v) => set({ normalization: v, ...resetTraining() }),
-      { label: 'Normalização das entradas' },
+      { label: 'Normalização' },
     ),
-    h('div', { class: 'counts' }, 'Calculada só com o treino.'),
+    h('div', { class: 'counts' }, 'Calculada só com o treino. Saídas numéricas: Min-Max para a faixa da ativação de saída.'),
   );
 }
 

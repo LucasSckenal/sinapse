@@ -70,6 +70,8 @@ export interface State {
   status: TrainStatus;
   history: EpochResult[];
   testMSE: number | undefined;
+  /** MSE do teste na unidade do arquivo (só quando as saídas foram normalizadas). */
+  testMSEOriginal: number | undefined;
   testAccuracy: number | undefined;
   /** Parada antecipada: épocas sem melhorar na validação antes de parar (0 = desligada). */
   patience: number;
@@ -102,6 +104,7 @@ export const state: State = {
   status: 'parado',
   history: [],
   testMSE: undefined,
+  testMSEOriginal: undefined,
   testAccuracy: undefined,
   patience: 0,
   bestEpoch: 0,
@@ -128,7 +131,7 @@ export function set(patch: Partial<State>): void {
 /** Limpa o histórico do treino. Com um treino rodando não mexe em nada: a mudança vale no próximo. */
 export function resetTraining(): Partial<State> {
   if (state.status === 'rodando' || state.status === 'pausado') return {};
-  return { status: 'parado', history: [], testMSE: undefined, testAccuracy: undefined, bestEpoch: 0, earlyStopped: false, splitCounts: null, trainError: '' };
+  return { status: 'parado', history: [], testMSE: undefined, testMSEOriginal: undefined, testAccuracy: undefined, bestEpoch: 0, earlyStopped: false, splitCounts: null, trainError: '' };
 }
 
 export function architectureText(arch: Architecture): string {

@@ -1,10 +1,11 @@
 import { decode, encode, type Decoded } from './encoding';
-import { normalizeRow } from './normalization';
+import { normalizeRow, unscaleOutputs } from './normalization';
 import type { Model } from './persistence';
 
 /**
  * Previsão (requisito 1.12): confere a quantidade de valores, aplica a mesma
  * normalização do treino e faz só a propagação direta (os pesos não mudam).
+ * Se as saídas foram normalizadas no treino, desfaz a conta: o valor volta na unidade do arquivo.
  */
 export function predict(model: Model, values: readonly number[]): number[] {
   const n = model.net.inputCount;
@@ -12,7 +13,7 @@ export function predict(model: Model, values: readonly number[]): number[] {
   values.forEach((v, i) => {
     if (!Number.isFinite(v)) throw new Error(`O valor ${i + 1} não é um número.`);
   });
-  return model.net.forward(normalizeRow(model.normalization, values));
+  return unscaleOutputs(model.outputScaling, model.net.forward(normalizeRow(model.normalization, values)));
 }
 
 /**

@@ -3,7 +3,7 @@ import { validateCodings, type ColumnCoding } from './encoding';
 import { Layer } from './layer';
 import { Network, blocksOf, sourcesFor, validateArchitecture, type Architecture } from './network';
 import { Neuron } from './neuron';
-import { validateNormalization, type Normalization } from './normalization';
+import { validateNormalization, validateOutputScaling, type Normalization, type OutputScaling } from './normalization';
 
 /**
  * Persistência em JSON (requisito 1.11). O formato está documentado no README.
@@ -34,6 +34,8 @@ export interface SavedModel {
   quantidadeCamadas: number;
   camadas: SavedLayer[];
   normalizacao: Normalization | null;
+  /** Min-Max das saídas numéricas (ausente em redes salvas antes disso: saídas como no arquivo). */
+  normalizacaoSaidas?: OutputScaling | null;
   /** Nomes das colunas, só para a interface rotular os campos. */
   colunas?: { entradas: string[]; saidas: string[] };
   /** Como cada coluna do CSV virou números: "numero" passa direto, "classe" vira uma posição por classe. */
@@ -43,6 +45,7 @@ export interface SavedModel {
 export interface Model {
   net: Network;
   normalization: Normalization | null;
+  outputScaling?: OutputScaling | null;
   columns?: { entradas: string[]; saidas: string[] };
   codings?: { entradas: ColumnCoding[]; saidas: ColumnCoding[] };
 }
@@ -63,6 +66,7 @@ export function serialize(model: Model): SavedModel {
         : {}),
     })),
     normalizacao: model.normalization,
+    ...(model.outputScaling ? { normalizacaoSaidas: model.outputScaling } : {}),
     ...(model.columns ? { colunas: model.columns } : {}),
     ...(model.codings ? { codificacao: model.codings } : {}),
   };
@@ -137,7 +141,13 @@ export function deserialize(data: unknown): Model {
         saidas: validateCodings(d.codificacao.saidas, net.outputCount, 'saídas'),
       }
     : undefined;
-  return { net, normalization: validateNormalization(d.normalizacao, net.inputCount), columns, codings };
+  return {
+    net,
+    normalization: validateNormalization(d.normalizacao, net.inputCount),
+    outputScaling: validateOutputScaling(d.normalizacaoSaidas, net.outputCount),
+    columns,
+    codings,
+  };
 }
 
 export function fromJSON(text: string): Model {
