@@ -6,6 +6,8 @@ import { predict } from '../core/predict';
 /**
  * Fronteira ao vivo: com 2 entradas numéricas, pinta o plano com a classe que a rede escolhe
  * em cada ponto (tom = classe, força = confiança) e marca os exemplos reais por cima.
+ * Com 2 entradas e uma saída numérica que não é só 0/1 (regressão), pinta o valor previsto
+ * em tons de cinza (claro = maior) e põe os exemplos reais por cima, cada um no tom do valor real.
  * Com 1 entrada numérica, desenha a curva da rede sobre os pontos.
  */
 export type BoundaryKind = '2d' | '1d' | null;
@@ -17,6 +19,12 @@ export function boundaryKind(model: Model): BoundaryKind {
     return ins.length === 2 ? '2d' : ins.length === 1 ? '1d' : null;
   }
   return model.net.inputCount === 2 ? '2d' : model.net.inputCount === 1 ? '1d' : null;
+}
+
+/** Saída única, numérica e com valores além de 0 e 1: o mapa mostra o valor, não uma classe. */
+export function isRegression(table: Table, outCols: number[]): boolean {
+  if (outCols.length !== 1 || table.classes[outCols[0]]) return false;
+  return table.rows.some((r) => r[outCols[0]] !== 0 && r[outCols[0]] !== 1);
 }
 
 const TONES = [
@@ -75,7 +83,8 @@ export class Boundary {
       this.el.width = size;
       this.el.height = size;
     }
-    if (kind === '2d') this.draw2d(model, table, inCols, outCols, size);
+    if (kind === '2d' && isRegression(table, outCols)) this.drawValue(model, table, inCols, outCols[0], size);
+    else if (kind === '2d') this.draw2d(model, table, inCols, outCols, size);
     else if (kind === '1d') this.draw1d(model, table, inCols, outCols, size);
   }
 
@@ -130,6 +139,78 @@ export class Boundary {
       const pred = classOf(predict(model, [row[inCols[0]], row[inCols[1]]]), cods).k;
       this.marker(px, py, k, 3.2 * s, pred !== k);
     }
+  }
+
+  /** Regressão com 2 entradas: o plano no tom do valor previsto, os exemplos no tom do valor real. */
+  private drawValue(model: Model, table: Table, inCols: number[], outCol: number, size: number): void {
+    // margem maior que a da fronteira: os nomes dos eixos ficam fora dos pontos
+    const wide = ([lo, hi]: [number, number]): [number, number] => [lo - (hi - lo) * 0.07, hi + (hi - lo) * 0.07];
+    const [x0, x1] = wide(this.range(table.rows.map((r) => r[inCols[0]])));
+    const [y0, y1] = wide(this.range(table.rows.map((r) => r[inCols[1]])));
+    // escala de cinza entre os percentis 5 e 95 dos valores reais: um ponto fora da curva não apaga o contraste
+    const sorted = table.rows.map((r) => r[outCol]).sort((a, b) => a - b);
+    const vLo = sorted[Math.floor((sorted.length - 1) * 0.05)];
+    const vHi = sorted[Math.ceil((sorted.length - 1) * 0.95)];
+    const span = vHi - vLo || 1;
+    const gray = (v: number) => 30 + Math.max(0, Math.min(1, (v - vLo) / span)) * 210;
+    const G = this.G;
+    if (!this.img || this.img.width !== G) this.img = new ImageData(G, G);
+    const d = this.img.data;
+    for (let gy = 0; gy < G; gy++)
+      for (let gx = 0; gx < G; gx++) {
+        const x = x0 + ((gx + 0.5) / G) * (x1 - x0);
+        const y = y1 - ((gy + 0.5) / G) * (y1 - y0);
+        const g = gray(predict(model, [x, y])[0]) * 0.86;
+        const i = (gy * G + gx) * 4;
+        d[i] = g;
+        d[i + 1] = g;
+        d[i + 2] = g + 2;
+        d[i + 3] = 255;
+      }
+    const tmp = document.createElement('canvas');
+    tmp.width = G;
+    tmp.height = G;
+    tmp.getContext('2d')!.putImageData(this.img, 0, 0);
+    const c = this.ctx;
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(tmp, 0, 0, size, size);
+    // exemplos reais: repetidos no mesmo ponto se espalham um pouco para aparecerem todos
+    const s = size / 360;
+    const seen = new Map<string, number>();
+    const step = Math.max(1, Math.floor(table.rows.length / 500));
+    for (let r = 0; r < table.rows.length; r += step) {
+      const row = table.rows[r];
+      const key = `${row[inCols[0]]}/${row[inCols[1]]}`;
+      const n = seen.get(key) ?? 0;
+      seen.set(key, n + 1);
+      const ang = n * 2.4;
+      const rad = n ? 3.2 * s * Math.sqrt(n) * 1.6 : 0;
+      const px = ((row[inCols[0]] - x0) / (x1 - x0)) * size + Math.cos(ang) * rad;
+      const py = (1 - (row[inCols[1]] - y0) / (y1 - y0)) * size + Math.sin(ang) * rad;
+      const g = Math.round(gray(row[outCol]));
+      c.beginPath();
+      c.arc(px, py, 3 * s, 0, Math.PI * 2);
+      c.fillStyle = `rgb(${g},${g},${g + 2})`;
+      c.fill();
+      c.lineWidth = Math.max(1, s * 0.9);
+      c.strokeStyle = 'rgba(11,11,12,0.85)';
+      c.stroke();
+    }
+    // nomes dos eixos, para saber o que é cada direção
+    c.font = `${Math.round(10 * s)}px "JetBrains Mono", monospace`;
+    c.fillStyle = 'rgba(242,242,243,0.82)';
+    c.shadowColor = 'rgba(0,0,0,0.8)';
+    c.shadowBlur = 4 * s;
+    c.textAlign = 'right';
+    c.fillText(`${table.headers[inCols[0]]} →`, size - 8 * s, size - 8 * s);
+    c.save();
+    c.translate(14 * s, 8 * s);
+    c.rotate(Math.PI / 2);
+    c.textAlign = 'left';
+    c.fillText(`← ${table.headers[inCols[1]]}`, 0, 0);
+    c.restore();
+    c.shadowBlur = 0;
   }
 
   private marker(x: number, y: number, k: number, r: number, wrong: boolean): void {

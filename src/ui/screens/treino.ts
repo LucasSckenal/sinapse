@@ -2,7 +2,7 @@ import { selectColumns, splitSizes } from '../../core/dataset';
 import { confusionMatrix } from '../../core/encoding';
 import { NORMALIZATION_LABELS, describeOutputScaling, normalizeRows, scaleTargets } from '../../core/normalization';
 import { deserialize, serialize, type SavedModel } from '../../core/persistence';
-import { Boundary, boundaryKind } from '../boundary';
+import { Boundary, boundaryKind, isRegression } from '../boundary';
 import { MseChart } from '../chart';
 import { fmt, h, icon, notice, parseNum, segmented } from '../dom';
 import { cycleOf, mountNet, mountSurface, type NetHandle, type SurfaceHandle } from '../net3d-mount';
@@ -122,6 +122,7 @@ export function treinoScreen(): HTMLElement {
   // a fronteira usa a rede atual e as colunas escolhidas (só quando batem com a rede)
   const compatible = blockers.length === 0 || busy;
   const kind = compatible ? boundaryKind(model) : null;
+  const regression = kind === '2d' && !!state.table && isRegression(state.table, state.selection.outputs);
   let liveModel = model;
   let lastBoundary = 0;
   const drawBoundary = (force = false) => {
@@ -195,7 +196,9 @@ export function treinoScreen(): HTMLElement {
     valEl.textContent = fmt(last?.valMSE);
     testEl.textContent = fmt(state.testMSE);
     testEl.style.color = state.testMSE === undefined ? 'var(--t3)' : '';
-    testOrigEl.textContent = state.testMSEOriginal !== undefined ? `${fmt(state.testMSEOriginal)} na unidade do arquivo` : '';
+    const orig = state.testMSEOriginal;
+    // número grande (kg/ha², R$²…) sem casas demais; pequeno continua com o formato de sempre
+    testOrigEl.textContent = orig === undefined ? '' : `${Math.abs(orig) >= 100 ? orig.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : fmt(orig)} na unidade do arquivo`;
     const va = last?.valAccuracy;
     const ta = state.testAccuracy;
     const pctTxt = (x: number) => `${(x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -356,7 +359,7 @@ export function treinoScreen(): HTMLElement {
     ? h(
         'section',
         { class: 'card boundary-card' },
-        h('div', { class: 'card-head' }, h('span', { class: 'lbl wide' }, kind === '2d' ? 'Fronteira' : 'Curva da rede'), h('span', { class: 'lbl' }, kind === '2d' ? 'anel = a rede ainda erra' : 'pontos = dataset')),
+        h('div', { class: 'card-head' }, h('span', { class: 'lbl wide' }, kind === '2d' ? (regression ? 'Mapa da rede' : 'Fronteira') : 'Curva da rede'), h('span', { class: 'lbl' }, kind === '2d' ? (regression ? 'claro = maior · pontos = dataset' : 'anel = a rede ainda erra') : 'pontos = dataset')),
         v.boundary.el,
       )
     : null;

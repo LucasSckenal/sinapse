@@ -379,7 +379,7 @@ body.presenting main { padding-bottom: 160px; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border-radius: var(--r2); overflow: hidden; }
 .stats > div { background: var(--s1); padding: 14px 16px; min-width: 0; }
 .stats b { display: block; font-size: 19px; font-weight: 400; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
-.stats .stat-orig { display: block; margin-top: 4px; font-size: 11px; color: var(--t3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats .stat-orig { display: block; margin-top: 4px; font-size: 11px; line-height: 1.35; color: var(--t3); overflow-wrap: anywhere; }
 .stats .stat-orig:empty { display: none; }
 .train-foot { display: flex; gap: 24px; align-items: center; border-top: 1px solid var(--line); padding-top: 20px; flex-wrap: wrap; }
 .progress { flex: 1; min-width: 140px; height: 3px; background: var(--line2); border-radius: 3px; overflow: hidden; }
