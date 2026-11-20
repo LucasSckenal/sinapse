@@ -33,12 +33,26 @@ await page.evaluateOnNewDocument(() => {
   });
 });
 
+// motion design (títulos, abertura, zoom da câmera): scripts/video-movimento.js
+await page.evaluateOnNewDocument((await import('node:fs')).readFileSync(new URL('./video-movimento.js', import.meta.url), 'utf8'));
+
 await page.goto(process.env.URL ?? 'https://sinapse-mlp.vercel.app', { waitUntil: 'networkidle0' });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'networkidle0' });
 // pausas de cena (1,5 s ou mais) esticam pelo fator da cena atual; cliques e movimentos não mudam
 let fator = 1;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms >= 1500 ? ms * fator : ms));
+// zoom da câmera: aproxima de um elemento; antes de medir, clicar ou rolar, volta ao normal
+let zoomado = false;
+async function zoom(fn, max) {
+  zoomado = (await page.evaluate((src, max) => window.__mo.zoom(new Function(src)(), max), fn, max)) || zoomado;
+}
+async function solta() {
+  if (!zoomado) return;
+  zoomado = false;
+  await page.evaluate(() => window.__mo.zoomOut());
+  await new Promise((r) => setTimeout(r, 1150));
+}
 let mx = 800, my = 450;
 await page.mouse.move(mx, my);
 
@@ -48,12 +62,14 @@ async function to(x, y, steps = 28) {
   mx = x; my = y;
 }
 async function clickAt(x, y) {
+  await solta();
   await to(x, y);
   await wait(180);
   await page.mouse.click(x, y);
   await wait(450);
 }
 async function box(fn, ...args) {
+  await solta();
   return page.evaluate((src, args) => {
     const el = new Function('args', src)(args);
     if (!el) return null;
@@ -84,6 +100,7 @@ async function setField(label, v) {
   await wait(500);
 }
 async function scrollMain(y) {
+  await solta();
   await page.evaluate((y) => {
     const m = document.querySelector('main');
     (m.scrollHeight > m.clientHeight ? m : document.scrollingElement).scrollTo({ top: y, behavior: 'smooth' });
@@ -121,8 +138,18 @@ async function cena(nome) {
     if (falta > 0) await new Promise((r) => setTimeout(r, falta));
   }
   fator = ALVOS[nome] && NATURAL[nome] ? Math.max(1, ALVOS[nome] / NATURAL[nome]) : 1;
+  await solta();
   cenas.push({ nome, t: Math.round((Date.now() - t0) / 100) / 10 });
+  const n = CAPITULOS.indexOf(nome);
+  if (n >= 0) await page.evaluate((n, total, nome) => window.__mo.capitulo(n, total, nome), n + 1, CAPITULOS.length, nome);
 }
+// títulos de capítulo das cenas do app; a abertura e o fechamento têm animação própria
+const CAPITULOS = ['Dados', 'Arquitetura', 'Um exemplo', 'Treinando', 'Resultados', 'Prever', 'Salvar'];
+// o menor cartão da página que tem esse texto
+const cartao = (re) => `return [...document.querySelectorAll('main .card, main section, main .panel')].filter((c) => ${re}.test(c.textContent) && c.getBoundingClientRect().height > 40).sort((a, b) => a.textContent.length - b.textContent.length)[0]`;
+// tempos da fala (s, contados do começo do áudio, que entra 0,5 s depois da cena)
+const NOME1 = process.env.NOME1 ?? 'Henrique Luan Fritz';
+const NOME2 = process.env.NOME2 ?? 'Lucas Pannenbecker Sckenal';
 
 
 async function scrollToEl(fn) {
@@ -138,6 +165,11 @@ async function cdpDownloads() {
 
 // 1. abertura: a tela inicial com a rede aprendendo ao vivo
 await cena('Abertura');
+await page.evaluate((a, b) => window.__mo.intro({
+  nome1: a, nome2: b, n1: 2.8, n2: 6.2, projeto: 9.2,
+  chips: [[13.8, 'MLP escrita do zero', true], [18.5, 'TypeScript'], [19.8, 'sem biblioteca de IA'], [21.9, 'dataset de produtividade']],
+  sai: 26.6,
+}), NOME1, NOME2);
 await to(900, 520, 40);
 await wait(7000);
 
@@ -149,17 +181,25 @@ await wait(400);
 const [chooser] = await Promise.all([page.waitForFileChooser(), page.mouse.click(drop.x, drop.y)]);
 await wait(700);
 await chooser.accept([arquivo]);
-await wait(6000);
+await wait(2500);
+await zoom(cartao('/Colunas/i'));
+await wait(4500);
+await zoom(cartao('/Divis/'));
+await wait(5000);
 await scrollToEl(`return [...document.querySelectorAll('main .card, main section')].find((c) => /Como o arquivo foi lido/i.test(c.textContent))`);
-await wait(6000);
+await wait(3000);
 await scrollToEl(`return [...document.querySelectorAll('main .lbl')].find((l) => /Normaliza/.test(l.textContent))`);
-await wait(6000);
+await wait(3000);
 await scrollMain(0);
 
 // 3. arquitetura: 2 → 4 tanh → 1 linear, com a prévia
 await cena('Arquitetura');
 await click('Arquitetura', '.side');
-await wait(9000);
+await wait(1500);
+await zoom(cartao('/Camadas/i'));
+await wait(4000);
+await zoom(cartao('/Prévia/i'));
+await wait(3500);
 await click('Criar rede');
 await wait(2000);
 
@@ -168,8 +208,9 @@ await cena('Um exemplo');
 await click('2D');
 await wait(2000);
 await click('Um exemplo');
-await wait(4000);
+await wait(2500);
 await scrollToEl(`return document.querySelector('main .step-flow') ?? [...document.querySelectorAll('main section')].find((s) => /Um exemplo/.test(s.textContent) && s.querySelector('table'))`);
+await zoom(`return document.querySelector('main .step-flow') ?? [...document.querySelectorAll('main section')].find((s) => /Um exemplo/.test(s.textContent) && s.querySelector('table'))`, 1.35);
 await wait(9000);
 await scrollMain(0);
 await click('Um exemplo');
@@ -186,16 +227,20 @@ await trained();
 await wait(4000);
 // a curva do erro e o mapa da rede, com tempo para a narração
 await scrollToEl(`return document.querySelector('main .chart')`);
+await zoom(`return document.querySelector('main .chart')`, 1.6);
 await wait(9000);
 await scrollToEl(`return document.querySelector('main canvas.boundary')`);
+await zoom(`return document.querySelector('main canvas.boundary')`, 1.5);
 await wait(7000);
 await scrollMain(0);
 
 // 6. resultados: erro do teste nas duas escalas e a explicação
 await cena('Resultados');
 await scrollToEl(`return document.querySelector('main .stats')`);
+await zoom(`return document.querySelector('main .stats')`, 1.7);
 await wait(7000);
 await scrollToEl(`return document.querySelector('main .explain')`);
+await zoom(`return document.querySelector('main .explain')`, 1.35);
 await wait(12000);
 await scrollMain(0);
 
@@ -214,11 +259,17 @@ for (const [i, v] of ['250', '60'].entries()) {
   await wait(300);
 }
 await click('Prever', 'main .head');
-await wait(7000);
+await wait(500);
+await zoom(cartao('/Saídas/i'), 1.6);
+await wait(5500);
 await click('Linha do dataset', 'main .head');
-await wait(6000);
+await wait(500);
+await zoom(cartao('/Saídas/i'), 1.5);
+await wait(4500);
 await click('Linha do dataset', 'main .head');
-await wait(6000);
+await wait(500);
+await zoom(cartao('/Saídas/i'), 1.5);
+await wait(4500);
 
 // 8. salvar: a rede vai para um JSON
 await cena('Salvar');
@@ -227,6 +278,10 @@ await wait(5000);
 
 // 9. fechamento
 await cena('Fechamento');
+await page.evaluate((a, b) => window.__mo.fim({
+  chips: [[6.6, 'configurável', true], [7.7, 'treinada'], [8.8, 'testada'], [10.0, 'com o dataset do trabalho']],
+  obrigado: 12.2, nomes: a + '  ·  ' + b,
+}), NOME1, NOME2);
 await wait(6000);
 await cena('Fim');
 await cdp.send('Page.stopScreencast');

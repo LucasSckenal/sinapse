@@ -11,6 +11,8 @@ const cenas = JSON.parse(readFileSync(cenasArq, 'utf8'));
 const DEPOIS = { Dados: 'codigo-dados', Arquitetura: 'codigo-entidades', 'Um exemplo': 'codigo-retropropagacao', Treinando: 'codigo-treino', Resultados: 'codigo-testes', Salvar: 'codigo-prever' };
 const NOMES = { 'codigo-testes': 'Código: testes', 'codigo-dados': 'Código: divisão e normalização', 'codigo-entidades': 'Código: neurônio e ativações', 'codigo-retropropagacao': 'Código: retropropagação', 'codigo-treino': 'Código: treino', 'codigo-prever': 'Código: previsão e JSON' };
 
+// transição: cada trecho escurece 0,22 s no fim e clareia 0,22 s no começo (não muda a duração, a narração segue sincronizada)
+const passagem = (d) => `fade=t=in:st=0:d=0.22,fade=t=out:st=${(d - 0.22).toFixed(3)}:d=0.22`;
 const dur = (f) => Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString().trim());
 const inputs = [app];
 const parts = [];
@@ -20,14 +22,14 @@ const fim = cenas.find((c) => c.nome === 'Fim')?.t ?? dur(app);
 cenas.filter((c) => c.nome !== 'Fim').forEach((c, i, arr) => {
   const a = c.t;
   const b = arr[i + 1]?.t ?? fim;
-  parts.push(`[0:v]trim=start=${a}:end=${b},setpts=PTS-STARTPTS[p${parts.length}]`);
+  parts.push(`[0:v]trim=start=${a}:end=${b},setpts=PTS-STARTPTS,${passagem(b - a)}[p${parts.length}]`);
   novas.push({ nome: c.nome, t: Math.round(t * 10) / 10 });
   t += b - a;
   const cod = DEPOIS[c.nome];
   if (cod) {
     const f = path.join(pasta, `${cod}.mp4`);
     inputs.push(f);
-    parts.push(`[${inputs.length - 1}:v]setpts=PTS-STARTPTS,fps=30[p${parts.length}]`);
+    parts.push(`[${inputs.length - 1}:v]setpts=PTS-STARTPTS,fps=30,${passagem(dur(f))}[p${parts.length}]`);
     novas.push({ nome: NOMES[cod], t: Math.round(t * 10) / 10 });
     t += dur(f);
   }

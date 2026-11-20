@@ -4,7 +4,7 @@
     "dur": 33.8,
     "falas": [
       [0.2, "Bom dia, boa tarde, boa noite."],
-      [2.3, "O nosso grupo é composto por mim, Henrique Leão Fittes,"],
+      [2.3, "O nosso grupo é composto por mim, Henrique Luan Fritz,"],
       [5.7, "e pelo meu colega Lucas Pannenbecker Sckenal."],
       [8.7, "Nós vamos falar sobre o nosso projeto de redes neurais."],
       [13.3, "Nós criamos uma MLP escrita do zero, em TypeScript, sem biblioteca de IA,"],
