@@ -3,44 +3,74 @@
 <head>
 <meta charset="UTF-8" />
 <title>Sinapse · código</title>
-<!-- Tela de código para o vídeo: recebe a cena em window.cena e anda pelos focos. Gravada por scripts/video-codigo.mjs. -->
+<!-- Tela de código para o vídeo: recebe a cena em window.play(cena) e anda pelos focos. Gravada por scripts/video-codigo.mjs.
+     Se cada foco tiver "em" (ms desde o início da cena), o destaque entra exatamente nesse instante (sincronizado com a narração). -->
 <style>
   @font-face { font-family: 'Archivo'; src: url('../node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2') format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; }
   @font-face { font-family: 'Archivo'; src: url('../node_modules/@fontsource-variable/archivo/files/archivo-latin-ext-wdth-normal.woff2') format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; unicode-range: U+0100-024F, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
   @font-face { font-family: 'JetBrains Mono'; src: url('../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
   @font-face { font-family: 'JetBrains Mono'; src: url('../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
-  :root { --bg: #0b0b0c; --s1: #121214; --s2: #18181b; --line: #232327; --line2: #2e2e33; --t1: #f2f2f3; --t2: #a6a6ad; --t3: #8a8a92; --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
+  :root { --bg: #0b0b0c; --s1: #121214; --line: #232327; --t1: #f2f2f3; --t2: #a6a6ad; --t3: #8a8a92; --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --spring: cubic-bezier(0.25, 1.15, 0.35, 1); }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--t1); font-family: 'Archivo', system-ui, sans-serif; overflow: hidden; }
-  .stage { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 26px; padding: 56px 72px 48px; }
-  .eyebrow { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--t3); font-variation-settings: 'wdth' 125; }
-  h1 { margin-top: 10px; font-size: 46px; font-weight: 300; letter-spacing: 0.02em; text-transform: uppercase; font-variation-settings: 'wdth' 125; }
-  .file { margin-top: 12px; font: 400 14px 'JetBrains Mono', monospace; color: var(--t2); }
-  .card { position: relative; background: var(--s1); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
-  .code { position: absolute; left: 0; right: 0; top: 0; padding: 26px 0; font: 400 19px/1.62 'JetBrains Mono', monospace; font-variant-ligatures: none; transition: transform 0.9s var(--ease); }
-  .ln { display: grid; grid-template-columns: 76px 1fr; white-space: pre; color: var(--t3); transition: color 0.5s var(--ease), opacity 0.5s var(--ease); }
-  .ln > span:last-child { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 28px; }
-  .ln .n { text-align: right; padding-right: 22px; color: #4a4a52; user-select: none; }
-  .code.focusing .ln { opacity: 0.32; }
-  .code.focusing .ln.on { opacity: 1; }
+  /* luz ambiente: um brilho bem fraco que anda devagar atrás de tudo */
+  body::before { content: ''; position: fixed; inset: -20%; background: radial-gradient(40% 35% at 30% 20%, #ffffff0b, transparent 70%), radial-gradient(35% 30% at 75% 85%, #ffffff07, transparent 70%); animation: drift 24s ease-in-out infinite alternate; pointer-events: none; }
+  @keyframes drift { to { transform: translate(6%, -4%) scale(1.06); } }
+  .stage { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 26px; padding: 56px 72px 44px; }
+  .eyebrow { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--t3); font-variation-settings: 'wdth' 125; opacity: 0; transform: translateY(6px); transition: opacity 0.7s var(--ease), transform 0.7s var(--ease); }
+  h1 { margin-top: 10px; font-size: 46px; font-weight: 300; letter-spacing: 0.02em; text-transform: uppercase; font-variation-settings: 'wdth' 125; clip-path: inset(0 100% 0 0); transition: clip-path 1.1s var(--ease) 0.15s; }
+  .shown .eyebrow { opacity: 1; transform: none; }
+  .shown h1 { clip-path: inset(0 0 0 0); }
+  .file { margin-top: 12px; font: 400 14px 'JetBrains Mono', monospace; color: var(--t2); transition: opacity 0.4s var(--ease); }
+  .card { position: relative; background: linear-gradient(180deg, #141416, var(--s1)); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; opacity: 0; transform: translateY(14px) scale(0.99); transition: opacity 0.9s var(--ease) 0.25s, transform 0.9s var(--ease) 0.25s; }
+  .shown .card { opacity: 1; transform: none; }
+  .code { position: absolute; left: 0; right: 0; top: 0; padding: 26px 0; font: 400 19px/1.62 'JetBrains Mono', monospace; font-variant-ligatures: none; transition: transform 1s var(--ease), opacity 0.45s var(--ease); }
+  .code.out { opacity: 0; transform: translateY(-14px) !important; }
+  .ln { position: relative; display: grid; grid-template-columns: 76px 1fr; white-space: pre; color: var(--t3); opacity: 0; transform: translateY(8px); transition: opacity 0.6s var(--ease), transform 0.6s var(--ease), filter 0.6s var(--ease); }
+  .ln.in { opacity: 1; transform: none; }
+  .ln > span:last-child { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 28px; transition: transform 0.6s var(--spring); }
+  .ln .n { text-align: right; padding-right: 22px; color: #4a4a52; user-select: none; transition: color 0.5s var(--ease); }
+  .code.focusing .ln.in { opacity: 0.26; filter: blur(0.5px); }
+  .code.focusing .ln.in.on { opacity: 1; filter: none; }
+  .code.focusing .ln.on > span:last-child { transform: translateX(8px); }
+  .code.focusing .ln.on .n { color: #d8d8dc; }
   .ln .kw { color: #f2f2f3; font-weight: 500; }
   .ln .tx { color: #c9c9ce; }
   .ln .cm { color: #6c6c74; }
   .ln .nm { color: #e9e9ea; }
   .ln .st { color: #b4b4ba; }
-  .band { position: absolute; left: 12px; right: 12px; border-radius: 12px; background: #ffffff0d; border: 1px solid #ffffff1c; opacity: 0; transition: top 0.7s var(--ease), height 0.7s var(--ease), opacity 0.5s var(--ease); pointer-events: none; }
-  .caption { min-height: 64px; display: flex; align-items: center; gap: 16px; font-size: 24px; font-weight: 300; color: var(--t1); opacity: 0; transform: translateY(8px); transition: opacity 0.5s var(--ease), transform 0.5s var(--ease); }
-  .caption.on { opacity: 1; transform: none; }
-  .caption b { font: 500 15px 'JetBrains Mono', monospace; color: var(--bg); background: var(--t1); border-radius: 999px; padding: 4px 12px; }
-  .in { opacity: 0; transform: translateY(10px); animation: in 0.8s var(--ease) forwards; }
-  @keyframes in { to { opacity: 1; transform: none; } }
+  /* faixa do destaque: anda com mola e tem uma barrinha clara na esquerda */
+  .band { position: absolute; left: 12px; right: 12px; border-radius: 12px; background: linear-gradient(90deg, #ffffff12, #ffffff06 60%, #ffffff03); border: 1px solid #ffffff1c; box-shadow: 0 0 0 1px #00000040, 0 18px 50px -20px #ffffff1a; opacity: 0; transition: top 0.85s var(--spring), height 0.85s var(--spring), opacity 0.5s var(--ease); pointer-events: none; }
+  .band::before { content: ''; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--t1); transform: scaleY(0); transform-origin: top; transition: transform 0.7s var(--ease) 0.2s; }
+  .band.on::before { transform: scaleY(1); }
+  .band.pulse { animation: pulse 0.9s var(--ease); }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 1px #00000040, 0 0 0 0 #ffffff30; } 100% { box-shadow: 0 0 0 1px #00000040, 0 0 0 14px #ffffff00; } }
+  .progress { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: #ffffff30; transform-origin: left; transform: scaleX(0); }
+  .stage { grid-template-rows: auto auto 1fr auto; gap: 18px; }
+  h1 { white-space: nowrap; }
+  .meta { display: flex; align-items: center; justify-content: space-between; gap: 40px; min-height: 40px; }
+  .meta .file { margin-top: 0; flex: none; }
+  .caption.note { max-width: 64%; min-height: 0; display: flex; align-items: center; gap: 14px; justify-content: flex-end; text-align: right; font-size: 21px; font-weight: 300; color: var(--t2); }
+  /* legenda da narração, embaixo: frase por frase, as palavras entram rápido */
+  .sub { min-height: 84px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 30px; line-height: 1.3; font-weight: 400; color: var(--t1); padding: 0 40px; text-wrap: balance; }
+  .sub > span { display: block; max-width: 1500px; }
+  .sub .w { display: inline-block; opacity: 0; transform: translateY(6px); transition: opacity 0.3s var(--ease), transform 0.4s var(--ease); white-space: pre; }
+  .sub .w.on { opacity: 1; transform: none; }
+  .sub.leaving .w { opacity: 0; transition-duration: 0.18s; transition-delay: 0s !important; }
+  .caption { min-height: 64px; display: flex; align-items: center; gap: 16px; font-size: 25px; font-weight: 300; color: var(--t1); }
+  .caption b { font: 500 15px 'JetBrains Mono', monospace; color: var(--bg); background: var(--t1); border-radius: 999px; padding: 4px 12px; opacity: 0; transform: scale(0.7); transition: opacity 0.4s var(--ease), transform 0.5s var(--spring); }
+  .caption b.on { opacity: 1; transform: none; }
+  .caption .w { display: inline-block; opacity: 0; transform: translateY(10px); filter: blur(6px); transition: opacity 0.5s var(--ease), transform 0.6s var(--ease), filter 0.5s var(--ease); white-space: pre; }
+  .caption .w.on { opacity: 1; transform: none; filter: none; }
+  .caption.leaving .w { opacity: 0; transform: translateY(-8px); filter: blur(4px); transition-duration: 0.25s; transition-delay: 0s !important; }
 </style>
 </head>
 <body>
-<div class="stage">
-  <header class="in"><div class="eyebrow" id="eyebrow"></div><h1 id="title"></h1><div class="file" id="file"></div></header>
-  <div class="card in" style="animation-delay: 0.15s"><div class="band" id="band"></div><div class="code" id="code"></div></div>
-  <div class="caption" id="caption"><b id="step"></b><span id="text"></span></div>
+<div class="stage" id="stage">
+  <header><div class="eyebrow" id="eyebrow"></div><h1 id="title"></h1></header>
+  <div class="meta"><div class="file" id="file"></div><div class="caption note" id="caption"><b id="step"></b><span id="text"></span></div></div>
+  <div class="card" id="card"><div class="band" id="band"></div><div class="code" id="code"></div><div class="progress" id="progress"></div></div>
+  <div class="sub"><span id="sub"></span></div>
 </div>
 <script>
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -48,7 +78,7 @@
   function paint(lines) {
     let inBlock = false;
     return lines.map((raw) => {
-      let line = raw;
+      const line = raw;
       let out = '';
       if (inBlock || /^\s*\/\*\*?/.test(line)) {
         inBlock = !/\*\//.test(line);
@@ -67,51 +97,109 @@
       return `<span class="tx">${out}</span>`;
     });
   }
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  async function page(p, first) {
-    const code = document.getElementById('code');
-    const band = document.getElementById('band');
-    const cap = document.getElementById('caption');
-    document.getElementById('file').textContent = p.rotulo ?? `${p.arquivo} · linhas ${p.de}–${p.ate}`;
-    if (!first) { code.style.opacity = 0; cap.classList.remove('on'); band.style.opacity = 0; await wait(450); }
+  const $ = (id) => document.getElementById(id);
+  const wait = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+  let t0 = 0;
+  const until = (ms) => wait(t0 + ms - performance.now());
+
+  async function enterPage(p, first) {
+    const code = $('code');
+    if (!first) {
+      code.classList.add('out');
+      $('band').style.opacity = 0;
+      $('band').classList.remove('on');
+      $('file').style.opacity = 0;
+      await leaveCaption();
+      await wait(450);
+    }
+    $('file').textContent = p.rotulo ?? `${p.arquivo} · linhas ${p.de}–${p.ate}`;
+    $('file').style.opacity = 1;
     const html = paint(p.linhas);
     code.innerHTML = html.map((h, i) => `<div class="ln" data-n="${p.de + i}"><span class="n">${p.de + i}</span><span>${h || ' '}</span></div>`).join('');
     code.classList.remove('focusing');
-    code.style.transform = 'translateY(0)';
     code.style.transition = 'none';
-    code.style.opacity = 1;
+    code.style.transform = 'translateY(0)';
+    code.classList.remove('out');
     await wait(30);
     code.style.transition = '';
-    await wait(p.antes ?? 1600);
-    const card = code.parentElement;
-    let k = 0;
-    for (const f of p.focos) {
-      k++;
-      const rows = [...code.children].filter((r) => +r.dataset.n >= f.de && +r.dataset.n <= f.ate);
-      [...code.children].forEach((r) => r.classList.toggle('on', rows.includes(r)));
-      code.classList.add('focusing');
-      // rola o código para o foco ficar no meio do cartão
-      const top = rows[0].offsetTop;
-      const bottom = rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight;
-      const room = card.clientHeight;
-      const shift = Math.max(0, Math.min(code.scrollHeight - room, (top + bottom) / 2 - room / 2));
-      code.style.transform = `translateY(${-shift}px)`;
-      band.style.top = `${top - shift - 6}px`;
-      band.style.height = `${bottom - top + 12}px`;
-      band.style.opacity = 1;
-      cap.classList.remove('on');
-      await wait(250);
-      document.getElementById('step').textContent = `${k}/${p.focos.length}`;
-      document.getElementById('text').textContent = f.legenda;
-      cap.classList.add('on');
-      await wait(f.ms ?? 4200);
-    }
+    // as linhas entram em cascata
+    [...code.children].forEach((r, i) => setTimeout(() => r.classList.add('in'), 60 + Math.min(i, 30) * 22));
   }
+
+  async function leaveCaption() {
+    const cap = $('caption');
+    if (!$('text').children.length) return;
+    cap.classList.add('leaving');
+    $('step').classList.remove('on');
+    await wait(260);
+    cap.classList.remove('leaving');
+  }
+
+  async function focus(f, k, total) {
+    const code = $('code');
+    const band = $('band');
+    const card = $('card');
+    const rows = [...code.children].filter((r) => +r.dataset.n >= f.de && +r.dataset.n <= f.ate);
+    [...code.children].forEach((r) => r.classList.toggle('on', rows.includes(r)));
+    code.classList.add('focusing');
+    // rola o código para o foco ficar no meio do cartão
+    const top = rows[0].offsetTop;
+    const bottom = rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight;
+    const room = card.clientHeight;
+    const shift = Math.max(0, Math.min(code.scrollHeight - room, (top + bottom) / 2 - room / 2));
+    code.style.transform = `translateY(${-shift}px)`;
+    band.style.top = `${top - shift - 6}px`;
+    band.style.height = `${bottom - top + 12}px`;
+    band.style.opacity = 1;
+    band.classList.remove('on', 'pulse');
+    void band.offsetWidth;
+    band.classList.add('on', 'pulse');
+    // legenda: sai a anterior, entram as palavras uma a uma
+    await leaveCaption();
+    $('step').textContent = `${k}/${total}`;
+    $('text').innerHTML = f.legenda.split(/(\s+)/).map((w) => (/^\s+$/.test(w) ? w : `<span class="w">${esc(w)}</span>`)).join('');
+    await wait(20);
+    $('step').classList.add('on');
+    [...$('text').children].forEach((w, i) => { w.style.transitionDelay = `${i * 38}ms`; w.classList.add('on'); });
+  }
+
   window.play = async (cena) => {
-    document.getElementById('eyebrow').textContent = cena.eyebrow;
-    document.getElementById('title').textContent = cena.titulo;
-    for (let i = 0; i < cena.paginas.length; i++) await page(cena.paginas[i], i === 0);
-    await wait(1200);
+    $('eyebrow').textContent = cena.eyebrow;
+    $('title').textContent = cena.titulo;
+    t0 = performance.now();
+    const sync = cena.paginas.every((p) => p.focos.every((f) => typeof f.em === 'number'));
+    // barra de progresso da cena inteira, embaixo do cartão
+    const fim = cena.fim ?? 0;
+    if (fim) {
+      const pr = $('progress');
+      pr.style.transition = `transform ${fim / 1000}s linear`;
+      requestAnimationFrame(() => (pr.style.transform = 'scaleX(1)'));
+    }
+    $('stage').classList.add('shown');
+    // legenda da narração: cada fala entra no seu instante e fica até a próxima
+    const sub = $('sub');
+    (cena.falas ?? []).forEach((fala) =>
+      setTimeout(async () => {
+        if (sub.children.length) { sub.parentElement.classList.add('leaving'); await wait(180); sub.parentElement.classList.remove('leaving'); }
+        sub.innerHTML = fala.txt.split(/(\s+)/).map((w) => (/^\s+$/.test(w) ? w : `<span class="w">${esc(w)}</span>`)).join('');
+        await wait(20);
+        [...sub.children].forEach((w, i) => { w.style.transitionDelay = `${i * 45}ms`; w.classList.add('on'); });
+      }, fala.em),
+    );
+    for (let i = 0; i < cena.paginas.length; i++) {
+      const p = cena.paginas[i];
+      if (sync && i > 0) await until(p.focos[0].em - 900);
+      await enterPage(p, i === 0);
+      if (!sync) await wait(p.antes ?? 1600);
+      for (let k = 0; k < p.focos.length; k++) {
+        const f = p.focos[k];
+        if (sync) await until(f.em);
+        await focus(f, k + 1, p.focos.length);
+        if (!sync) await wait(f.ms ?? 4200);
+      }
+    }
+    if (sync && fim) await until(fim);
+    else await wait(1200);
     window.done = true;
   };
 </script>

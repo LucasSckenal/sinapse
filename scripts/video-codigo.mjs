@@ -166,6 +166,26 @@ if (process.env.DURACOES) {
   }
 }
 
+// SINCRONIA=video/audios/sincronia.json: tempos em segundos DA NARRAÇÃO (o áudio limpo de cada cena).
+// {"codigo-dados": {"fim": 28.4, "focos": [0.1, 8.9, ...], "falas": [[0.1, "texto da legenda"], ...]}}
+// Cada destaque entra quando a frase dele começa, e a legenda mostra a fala. Tem prioridade sobre DURACOES.
+// A narração entra 0,3 s depois do play (o vídeo-montar põe o áudio 0,6 s depois do início do clipe, e o clipe começa 0,3 s antes do play).
+const ATRASO_AUDIO = 0.3;
+if (process.env.SINCRONIA) {
+  const sinc = JSON.parse(readFileSync(process.env.SINCRONIA, 'utf8'));
+  const ms = (s) => Math.round(s * 1000);
+  for (const c of CENAS) {
+    const s = sinc[c.id];
+    if (!s) continue;
+    const focos = c.paginas.flatMap((p) => p.focos);
+    if (s.focos.length !== focos.length) throw new Error(`${c.id}: ${focos.length} destaques, mas ${s.focos.length} tempos`);
+    // o destaque chega um tiquinho antes da palavra; o primeiro espera o cartão terminar de entrar
+    focos.forEach((f, i) => (f.em = Math.max(1300, ms(s.focos[i] + ATRASO_AUDIO - 0.15))));
+    c.falas = s.falas.map(([t, txt]) => ({ em: ms(t + ATRASO_AUDIO), txt }));
+    c.fim = ms(s.fim + ATRASO_AUDIO + 1.2);
+  }
+}
+
 const browser = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: ['--allow-file-access-from-files', '--hide-scrollbars'] });
 const so = process.argv.slice(3);
 for (const cena of CENAS.filter((c) => !so.length || so.includes(c.id))) {
@@ -178,7 +198,10 @@ for (const cena of CENAS.filter((c) => !so.length || so.includes(c.id))) {
   mkdirSync(dir, { recursive: true });
   const cdp = await page.createCDPSession();
   const frames = [];
+  let gravando = true;
   cdp.on('Page.screencastFrame', async (f) => {
+    // quadro que chega depois de parar a gravação é descartado (a pasta já pode ter sido apagada)
+    if (!gravando) return;
     writeFileSync(path.join(dir, `${String(frames.length).padStart(6, '0')}.jpg`), Buffer.from(f.data, 'base64'));
     frames.push(Date.now());
     await cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
@@ -187,6 +210,7 @@ for (const cena of CENAS.filter((c) => !so.length || so.includes(c.id))) {
   await new Promise((r) => setTimeout(r, 300));
   await page.evaluate((c) => window.play(c), cena);
   await page.waitForFunction(() => window.done === true, { timeout: 120000 });
+  gravando = false;
   await cdp.send('Page.stopScreencast');
   const tEnd = Date.now();
   const list = frames.map((t, i) => `file '${String(i).padStart(6, '0')}.jpg'\nduration ${(((frames[i + 1] ?? tEnd) - t) / 1000).toFixed(3)}`);
