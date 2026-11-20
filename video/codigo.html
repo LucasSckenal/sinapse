@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Sinapse · código</title>
+<!-- Tela de código para o vídeo: recebe a cena em window.cena e anda pelos focos. Gravada por scripts/video-codigo.mjs. -->
+<style>
+  @font-face { font-family: 'Archivo'; src: url('../node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2') format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; }
+  @font-face { font-family: 'Archivo'; src: url('../node_modules/@fontsource-variable/archivo/files/archivo-latin-ext-wdth-normal.woff2') format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; unicode-range: U+0100-024F, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+  :root { --bg: #0b0b0c; --s1: #121214; --s2: #18181b; --line: #232327; --line2: #2e2e33; --t1: #f2f2f3; --t2: #a6a6ad; --t3: #8a8a92; --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--t1); font-family: 'Archivo', system-ui, sans-serif; overflow: hidden; }
+  .stage { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 26px; padding: 56px 72px 48px; }
+  .eyebrow { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--t3); font-variation-settings: 'wdth' 125; }
+  h1 { margin-top: 10px; font-size: 46px; font-weight: 300; letter-spacing: 0.02em; text-transform: uppercase; font-variation-settings: 'wdth' 125; }
+  .file { margin-top: 12px; font: 400 14px 'JetBrains Mono', monospace; color: var(--t2); }
+  .card { position: relative; background: var(--s1); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+  .code { position: absolute; left: 0; right: 0; top: 0; padding: 26px 0; font: 400 19px/1.62 'JetBrains Mono', monospace; font-variant-ligatures: none; transition: transform 0.9s var(--ease); }
+  .ln { display: grid; grid-template-columns: 76px 1fr; white-space: pre; color: var(--t3); transition: color 0.5s var(--ease), opacity 0.5s var(--ease); }
+  .ln > span:last-child { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 28px; }
+  .ln .n { text-align: right; padding-right: 22px; color: #4a4a52; user-select: none; }
+  .code.focusing .ln { opacity: 0.32; }
+  .code.focusing .ln.on { opacity: 1; }
+  .ln .kw { color: #f2f2f3; font-weight: 500; }
+  .ln .tx { color: #c9c9ce; }
+  .ln .cm { color: #6c6c74; }
+  .ln .nm { color: #e9e9ea; }
+  .ln .st { color: #b4b4ba; }
+  .band { position: absolute; left: 12px; right: 12px; border-radius: 12px; background: #ffffff0d; border: 1px solid #ffffff1c; opacity: 0; transition: top 0.7s var(--ease), height 0.7s var(--ease), opacity 0.5s var(--ease); pointer-events: none; }
+  .caption { min-height: 64px; display: flex; align-items: center; gap: 16px; font-size: 24px; font-weight: 300; color: var(--t1); opacity: 0; transform: translateY(8px); transition: opacity 0.5s var(--ease), transform 0.5s var(--ease); }
+  .caption.on { opacity: 1; transform: none; }
+  .caption b { font: 500 15px 'JetBrains Mono', monospace; color: var(--bg); background: var(--t1); border-radius: 999px; padding: 4px 12px; }
+  .in { opacity: 0; transform: translateY(10px); animation: in 0.8s var(--ease) forwards; }
+  @keyframes in { to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <header class="in"><div class="eyebrow" id="eyebrow"></div><h1 id="title"></h1><div class="file" id="file"></div></header>
+  <div class="card in" style="animation-delay: 0.15s"><div class="band" id="band"></div><div class="code" id="code"></div></div>
+  <div class="caption" id="caption"><b id="step"></b><span id="text"></span></div>
+</div>
+<script>
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // realce simples, em tons de cinza como o app: comentário apagado, palavra-chave clara
+  function paint(lines) {
+    let inBlock = false;
+    return lines.map((raw) => {
+      let line = raw;
+      let out = '';
+      if (inBlock || /^\s*\/\*\*?/.test(line)) {
+        inBlock = !/\*\//.test(line);
+        return `<span class="cm">${esc(line)}</span>`;
+      }
+      // uma passada só: cada pedaço vira um tipo (comentário, texto, número, palavra-chave) ou fica como está
+      const TOK = /(\/\/.*$)|(`[^`]*`|'[^']*')|\b(\d+(?:\.\d+)?)\b|\b(export|function|const|let|for|of|if|else|return|new|throw|this|class|readonly|private|import|from|type|while|true|false|null)\b/g;
+      let last = 0;
+      for (const m of line.matchAll(TOK)) {
+        out += esc(line.slice(last, m.index));
+        const cls = m[1] ? 'cm' : m[2] ? 'st' : m[3] ? 'nm' : 'kw';
+        out += `<span class="${cls}">${esc(m[0])}</span>`;
+        last = m.index + m[0].length;
+      }
+      out += esc(line.slice(last));
+      return `<span class="tx">${out}</span>`;
+    });
+  }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function page(p, first) {
+    const code = document.getElementById('code');
+    const band = document.getElementById('band');
+    const cap = document.getElementById('caption');
+    document.getElementById('file').textContent = `${p.arquivo} · linhas ${p.de}–${p.ate}`;
+    if (!first) { code.style.opacity = 0; cap.classList.remove('on'); band.style.opacity = 0; await wait(450); }
+    const html = paint(p.linhas);
+    code.innerHTML = html.map((h, i) => `<div class="ln" data-n="${p.de + i}"><span class="n">${p.de + i}</span><span>${h || ' '}</span></div>`).join('');
+    code.classList.remove('focusing');
+    code.style.transform = 'translateY(0)';
+    code.style.transition = 'none';
+    code.style.opacity = 1;
+    await wait(30);
+    code.style.transition = '';
+    await wait(p.antes ?? 1600);
+    const card = code.parentElement;
+    let k = 0;
+    for (const f of p.focos) {
+      k++;
+      const rows = [...code.children].filter((r) => +r.dataset.n >= f.de && +r.dataset.n <= f.ate);
+      [...code.children].forEach((r) => r.classList.toggle('on', rows.includes(r)));
+      code.classList.add('focusing');
+      // rola o código para o foco ficar no meio do cartão
+      const top = rows[0].offsetTop;
+      const bottom = rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight;
+      const room = card.clientHeight;
+      const shift = Math.max(0, Math.min(code.scrollHeight - room, (top + bottom) / 2 - room / 2));
+      code.style.transform = `translateY(${-shift}px)`;
+      band.style.top = `${top - shift - 6}px`;
+      band.style.height = `${bottom - top + 12}px`;
+      band.style.opacity = 1;
+      cap.classList.remove('on');
+      await wait(250);
+      document.getElementById('step').textContent = `${k}/${p.focos.length}`;
+      document.getElementById('text').textContent = f.legenda;
+      cap.classList.add('on');
+      await wait(f.ms ?? 4200);
+    }
+  }
+  window.play = async (cena) => {
+    document.getElementById('eyebrow').textContent = cena.eyebrow;
+    document.getElementById('title').textContent = cena.titulo;
+    for (let i = 0; i < cena.paginas.length; i++) await page(cena.paginas[i], i === 0);
+    await wait(1200);
+    window.done = true;
+  };
+</script>
+</body>
+</html>
