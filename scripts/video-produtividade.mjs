@@ -36,7 +36,9 @@ await page.evaluateOnNewDocument(() => {
 await page.goto(process.env.URL ?? 'https://sinapse-mlp.vercel.app', { waitUntil: 'networkidle0' });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'networkidle0' });
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// pausas de cena (1,5 s ou mais) esticam pelo fator da cena atual; cliques e movimentos não mudam
+let fator = 1;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms >= 1500 ? ms * fator : ms));
 let mx = 800, my = 450;
 await page.mouse.move(mx, my);
 
@@ -108,7 +110,19 @@ cdp.on('Page.screencastFrame', async (f) => {
 await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
 const t0 = Date.now();
 const cenas = [];
-const cena = (nome) => cenas.push({ nome, t: Math.round((Date.now() - t0) / 100) / 10 });
+// ALVOS (opcional): arquivo JSON { "Abertura": 35, … } com quantos segundos cada cena precisa ter (o tamanho da narração).
+// As pausas da cena esticam na proporção do tamanho natural, e se ainda faltar tempo a cena segura no fim antes da próxima.
+const NATURAL = { Abertura: 7.4, Dados: 23, Arquitetura: 12.8, 'Um exemplo': 27.5, Treinando: 26, Resultados: 22.6, Prever: 28.5, Salvar: 5.9, Fechamento: 6 };
+const ALVOS = process.env.ALVOS ? JSON.parse((await import('node:fs')).readFileSync(process.env.ALVOS, 'utf8')) : {};
+async function cena(nome) {
+  const ant = cenas.at(-1);
+  if (ant && ALVOS[ant.nome]) {
+    const falta = ALVOS[ant.nome] * 1000 - (Date.now() - t0 - ant.t * 1000);
+    if (falta > 0) await new Promise((r) => setTimeout(r, falta));
+  }
+  fator = ALVOS[nome] && NATURAL[nome] ? Math.max(1, ALVOS[nome] / NATURAL[nome]) : 1;
+  cenas.push({ nome, t: Math.round((Date.now() - t0) / 100) / 10 });
+}
 
 
 async function scrollToEl(fn) {
@@ -123,12 +137,12 @@ async function cdpDownloads() {
 }
 
 // 1. abertura: a tela inicial com a rede aprendendo ao vivo
-cena('Abertura');
+await cena('Abertura');
 await to(900, 520, 40);
 await wait(7000);
 
 // 2. dados: o CSV do professor entra pelo quadro de arquivo
-cena('Dados');
+await cena('Dados');
 const drop = await box(`return document.querySelector('[aria-label="Escolher arquivo CSV"]')`);
 await to(drop.x, drop.y);
 await wait(400);
@@ -143,14 +157,14 @@ await wait(6000);
 await scrollMain(0);
 
 // 3. arquitetura: 2 → 4 tanh → 1 linear, com a prévia
-cena('Arquitetura');
+await cena('Arquitetura');
 await click('Arquitetura', '.side');
 await wait(9000);
 await click('Criar rede');
 await wait(2000);
 
 // 4. um exemplo passando pela rede, com as contas
-cena('Um exemplo');
+await cena('Um exemplo');
 await click('2D');
 await wait(2000);
 await click('Um exemplo');
@@ -164,7 +178,7 @@ await click('3D');
 await wait(1500);
 
 // 5. treinar: 1000 épocas, paciência 50 (parada antecipada)
-cena('Treinando');
+await cena('Treinando');
 await setField('Épocas', '1000');
 await setField('Paciência', '50');
 await click('Treinar');
@@ -178,7 +192,7 @@ await wait(7000);
 await scrollMain(0);
 
 // 6. resultados: erro do teste nas duas escalas e a explicação
-cena('Resultados');
+await cena('Resultados');
 await scrollToEl(`return document.querySelector('main .stats')`);
 await wait(7000);
 await scrollToEl(`return document.querySelector('main .explain')`);
@@ -186,7 +200,7 @@ await wait(12000);
 await scrollMain(0);
 
 // 7. prever: um valor digitado e linhas reais do dataset
-cena('Prever');
+await cena('Prever');
 await click('Prever', '.side');
 await wait(2500);
 const campos = await page.$$('main .field input');
@@ -207,14 +221,14 @@ await click('Linha do dataset', 'main .head');
 await wait(6000);
 
 // 8. salvar: a rede vai para um JSON
-cena('Salvar');
+await cena('Salvar');
 await click('Salvar', '.side');
 await wait(5000);
 
 // 9. fechamento
-cena('Fechamento');
+await cena('Fechamento');
 await wait(6000);
-cena('Fim');
+await cena('Fim');
 await cdp.send('Page.stopScreencast');
 const tEnd = Date.now();
 const list = frames.map((t, i) => `file '${String(i).padStart(6, '0')}.jpg'

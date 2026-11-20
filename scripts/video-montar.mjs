@@ -48,6 +48,40 @@ if (audios) {
     filtro += `;[${inputs.length - 1}:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=${ms}|${ms}[a${faixas.length}]`;
     faixas.push(`[a${faixas.length}]`);
   }
+  // narração das cenas do app (parte A): áudio 0,5 s depois do começo da cena e legenda queimada embaixo
+  const SA = process.env.SINCRONIA_A ? JSON.parse(readFileSync(process.env.SINCRONIA_A, 'utf8')) : {};
+  const ass = [];
+  const hora = (s) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${(s % 60).toFixed(2).padStart(5, '0')}`;
+  for (const [nome, a] of Object.entries(SA)) {
+    const cena = novas.find((n) => n.nome === nome);
+    if (!cena) continue;
+    inputs.push(path.join(audios, `${a.audio}.wav`));
+    const ms = Math.round((cena.t + 0.5) * 1000);
+    filtro += `;[${inputs.length - 1}:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=${ms}|${ms}[a${faixas.length}]`;
+    faixas.push(`[a${faixas.length}]`);
+    a.falas.forEach(([t0, txt], i) => {
+      const ini = cena.t + 0.5 + t0;
+      const fim = cena.t + 0.5 + (a.falas[i + 1]?.[0] ?? a.dur + 0.4) - 0.05;
+      ass.push(`Dialogue: 0,${hora(ini)},${hora(fim)},Fala,,0,0,0,,{\\fad(180,120)}${txt}`);
+    });
+  }
+  if (ass.length) {
+    writeFileSync('legendas-A.ass', `[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Fala,Segoe UI,40,&H00F3F2F2,&H00F3F2F2,&H38100C0B,&H00000000,0,0,0,0,100,100,0,0,3,16,0,2,220,220,56,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+${ass.join(String.fromCharCode(10))}
+`);
+    filtro = filtro.replace('concat=n=' + parts.length + ':v=1:a=0[v]', 'concat=n=' + parts.length + ':v=1:a=0,subtitles=legendas-A.ass[v]');
+  }
   filtro += `;${faixas.join('')}amix=inputs=${faixas.length}:normalize=0:duration=longest,apad,atrim=end=${t}[a]`;
   mapas.push('-map', '[a]', '-c:a', 'aac', '-b:a', '192k');
 }

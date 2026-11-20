@@ -1,0 +1,98 @@
+{
+  "Abertura": {
+    "audio": "a-abertura",
+    "dur": 33.8,
+    "falas": [
+      [0.2, "Bom dia, boa tarde, boa noite."],
+      [2.3, "O nosso grupo é composto por mim, Henrique Leão Fittes,"],
+      [5.7, "e pelo meu colega Lucas Pannenbecker Sckenal."],
+      [8.7, "Nós vamos falar sobre o nosso projeto de redes neurais."],
+      [13.3, "Nós criamos uma MLP escrita do zero, em TypeScript, sem biblioteca de IA,"],
+      [21.1, "com o dataset de produtividade fornecido pelo nosso professor."],
+      [26.3, "Como ela é sem biblioteca, cada conta é código nosso, e vamos mostrar."]
+    ]
+  },
+  "Dados": {
+    "audio": "a-dados",
+    "dur": 27.5,
+    "falas": [
+      [0.0, "Aqui estão os dados: são 179 linhas."],
+      [5.2, "Nas entradas temos sementes e nitrogênio, e na saída, a produtividade."],
+      [11.5, "A divisão é 70, 15 e 15, com semente, e a normalização é Min-Max."],
+      [16.0, "A validação escolhe quando parar, e o teste fica guardado para medir no final."],
+      [24.0, "E, com a semente, o resultado se repete."]
+    ]
+  },
+  "Arquitetura": {
+    "audio": "a-arquitetura",
+    "dur": 23.9,
+    "falas": [
+      [0.1, "Aqui, na arquitetura: ela é configurável."],
+      [3.8, "São 2 entradas e 4 neurônios na camada oculta."],
+      [9.1, "A saída é linear, e os pesos começam com Xavier."],
+      [13.0, "Ela é linear porque a produtividade não tem teto,"],
+      [17.1, "e o Xavier é para o sinal não sumir nem explodir entre as camadas."]
+    ]
+  },
+  "Um exemplo": {
+    "audio": "a-exemplo",
+    "dur": 21.7,
+    "falas": [
+      [0.0, "Exemplificando, temos um passo do treino com números reais:"],
+      [6.0, "a ida, o erro, os deltas e os pesos que mais mudaram."],
+      [12.7, "Isso mostra que o treino não é mágica:"],
+      [16.0, "é essa conta repetida milhares de vezes."]
+    ]
+  },
+  "Treinando": {
+    "audio": "a-treino",
+    "dur": 29.1,
+    "falas": [
+      [0.0, "Aqui, na parte de treino, o fluxo é este:"],
+      [4.3, "a linha cheia é o treino, e a tracejada é a validação."],
+      [9.0, "Com 50 épocas sem melhorar, o treino para."],
+      [11.6, "No mapa, quanto mais claro, mais produtividade."],
+      [18.0, "Isso mostra que a rede aprendeu um padrão real:"],
+      [24.0, "ela cai com sementes demais e nitrogênio alto."]
+    ]
+  },
+  "Resultados": {
+    "audio": "a-resultados",
+    "dur": 29.1,
+    "falas": [
+      [0.0, "Nos resultados, o MSE do teste aparece normalizado e em quilogramas por hectare."],
+      [8.7, "A explicação resume o treino."],
+      [10.5, "O dado tem ruído: mesmo acertando a média exata de cada ponto,"],
+      [18.6, "o MSE seria de 20.700. O teste deu 14.500,"],
+      [24.1, "e a rede chegou ao limite do que o dado permite."]
+    ]
+  },
+  "Prever": {
+    "audio": "a-prever",
+    "dur": 25.6,
+    "falas": [
+      [0.0, "Na previsão, o modelo prevê 2.700 quilogramas por hectare."],
+      [7.4, "Com uma linha real, dá para comparar."],
+      [10.5, "A média real nesse ponto é 2.780,"],
+      [20.0, "então o erro é pequeno perto do ruído."]
+    ]
+  },
+  "Salvar": {
+    "audio": "a-salvar",
+    "dur": 16.3,
+    "falas": [
+      [0.0, "Na parte de salvar, a rede treinada vai para um JSON."],
+      [5.4, "Treinar novamente gera outra rede,"],
+      [9.9, "enquanto salvar garante a mesma previsão depois."]
+    ]
+  },
+  "Fechamento": {
+    "audio": "a-fechamento",
+    "dur": 14.9,
+    "falas": [
+      [0.0, "Então, finalizando:"],
+      [3.9, "conseguimos uma MLP configurável, treinada e testada com o dataset do trabalho."],
+      [11.5, "Agradecemos pelo seu tempo."]
+    ]
+  }
+}
