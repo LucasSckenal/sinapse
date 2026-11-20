@@ -152,6 +152,20 @@ export const CENAS = [
   },
 ];
 
+// DURACOES=arquivo.json ({"codigo-dados": 30, ...} em segundos): estica os destaques de cada cena na mesma proporção
+// para a cena durar o tempo da narração. O resto (entrada, troca de página, final) fica igual.
+if (process.env.DURACOES) {
+  const alvo = JSON.parse(readFileSync(process.env.DURACOES, 'utf8'));
+  for (const c of CENAS) {
+    if (!alvo[c.id]) continue;
+    const focos = c.paginas.flatMap((p) => p.focos);
+    const soma = focos.reduce((s, f) => s + f.ms, 0);
+    const fixo = 300 + 1200 + c.paginas.reduce((s, p, i) => s + (i ? 480 : 30) + (p.antes ?? 1600) + p.focos.length * 250, 0);
+    const k = (alvo[c.id] * 1000 - fixo) / soma;
+    for (const f of focos) f.ms = Math.round(f.ms * k);
+  }
+}
+
 const browser = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: ['--allow-file-access-from-files', '--hide-scrollbars'] });
 const so = process.argv.slice(3);
 for (const cena of CENAS.filter((c) => !so.length || so.includes(c.id))) {

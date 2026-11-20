@@ -1,5 +1,5 @@
 // Junta a gravação do app com as cenas de código: cada trecho de código entra logo depois da cena do app que ele explica.
-// node scripts/video-montar.mjs <app.mp4> <app.cenas.json> <pasta-codigo> <saida.mp4>   (precisa do ffmpeg no PATH)
+// node scripts/video-montar.mjs <app.mp4> <app.cenas.json> <pasta-codigo> <saida.mp4> [pasta-narracoes]   (precisa do ffmpeg no PATH)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -33,7 +33,24 @@ cenas.filter((c) => c.nome !== 'Fim').forEach((c, i, arr) => {
   }
 });
 novas.push({ nome: 'Fim', t: Math.round(t * 10) / 10 });
-const filtro = `${parts.join(';')};${parts.map((_, i) => `[p${i}]`).join('')}concat=n=${parts.length}:v=1:a=0[v]`;
-execFileSync('ffmpeg', ['-y', '-v', 'error', ...inputs.flatMap((f) => ['-i', f]), '-filter_complex', filtro, '-map', '[v]', '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', saida]);
+let filtro = `${parts.join(';')};${parts.map((_, i) => `[p${i}]`).join('')}concat=n=${parts.length}:v=1:a=0[v]`;
+// 5º argumento opcional: pasta com as narrações das cenas de código (b1.wav … b6.wav), cada uma começa 0,6 s depois da cena
+const audios = process.argv[6];
+const NARRACAO = { 'codigo-dados': 'b1', 'codigo-entidades': 'b2', 'codigo-retropropagacao': 'b3', 'codigo-treino': 'b4', 'codigo-testes': 'b5', 'codigo-prever': 'b6' };
+const mapas = ['-map', '[v]'];
+if (audios) {
+  const faixas = [];
+  for (const [cod, b] of Object.entries(NARRACAO)) {
+    const cena = novas.find((n) => n.nome === NOMES[cod]);
+    if (!cena) continue;
+    inputs.push(path.join(audios, `${b}.wav`));
+    const ms = Math.round((cena.t + 0.6) * 1000);
+    filtro += `;[${inputs.length - 1}:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=${ms}|${ms}[a${faixas.length}]`;
+    faixas.push(`[a${faixas.length}]`);
+  }
+  filtro += `;${faixas.join('')}amix=inputs=${faixas.length}:normalize=0:duration=longest,apad,atrim=end=${t}[a]`;
+  mapas.push('-map', '[a]', '-c:a', 'aac', '-b:a', '192k');
+}
+execFileSync('ffmpeg', ['-y', '-v', 'error', ...inputs.flatMap((f) => ['-i', f]), '-filter_complex', filtro, ...mapas, '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', saida]);
 writeFileSync(saida.replace(/\.\w+$/, '') + '.cenas.json', JSON.stringify(novas, null, 1));
 console.log(JSON.stringify(novas));
