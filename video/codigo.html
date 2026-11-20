@@ -72,7 +72,7 @@
     const code = document.getElementById('code');
     const band = document.getElementById('band');
     const cap = document.getElementById('caption');
-    document.getElementById('file').textContent = `${p.arquivo} · linhas ${p.de}–${p.ate}`;
+    document.getElementById('file').textContent = p.rotulo ?? `${p.arquivo} · linhas ${p.de}–${p.ate}`;
     if (!first) { code.style.opacity = 0; cap.classList.remove('on'); band.style.opacity = 0; await wait(450); }
     const html = paint(p.linhas);
     code.innerHTML = html.map((h, i) => `<div class="ln" data-n="${p.de + i}"><span class="n">${p.de + i}</span><span>${h || ' '}</span></div>`).join('');

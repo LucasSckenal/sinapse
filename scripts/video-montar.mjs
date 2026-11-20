@@ -8,8 +8,8 @@ const [app, cenasArq, pasta, saida] = process.argv.slice(2);
 if (!saida) throw new Error('Uso: node scripts/video-montar.mjs <app.mp4> <app.cenas.json> <pasta-codigo> <saida.mp4>');
 const cenas = JSON.parse(readFileSync(cenasArq, 'utf8'));
 // depois de qual cena do app entra cada código
-const DEPOIS = { Dados: 'codigo-dados', Arquitetura: 'codigo-entidades', 'Um exemplo': 'codigo-retropropagacao', Treinando: 'codigo-treino', Salvar: 'codigo-prever' };
-const NOMES = { 'codigo-dados': 'Código: divisão e normalização', 'codigo-entidades': 'Código: neurônio e ativações', 'codigo-retropropagacao': 'Código: retropropagação', 'codigo-treino': 'Código: treino', 'codigo-prever': 'Código: previsão e JSON' };
+const DEPOIS = { Dados: 'codigo-dados', Arquitetura: 'codigo-entidades', 'Um exemplo': 'codigo-retropropagacao', Treinando: 'codigo-treino', Resultados: 'codigo-testes', Salvar: 'codigo-prever' };
+const NOMES = { 'codigo-testes': 'Código: testes', 'codigo-dados': 'Código: divisão e normalização', 'codigo-entidades': 'Código: neurônio e ativações', 'codigo-retropropagacao': 'Código: retropropagação', 'codigo-treino': 'Código: treino', 'codigo-prever': 'Código: previsão e JSON' };
 
 const dur = (f) => Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString().trim());
 const inputs = [app];

@@ -12,6 +12,17 @@ const saida = path.resolve(process.argv[2] ?? 'video/codigo');
 mkdirSync(saida, { recursive: true });
 const trecho = (arquivo, de, ate) => ({ arquivo, de, ate, linhas: readFileSync(path.join(raiz, arquivo), 'utf8').split(/\r?\n/).slice(de - 1, ate) });
 
+// roda os testes de verdade e mostra a lista: "✓ grupo › nome", e o resumo no fim
+const saidaTestes = execFileSync('npx vitest run --reporter=verbose', { cwd: raiz, shell: true, env: { ...process.env, NO_COLOR: '1' } }).toString();
+const testes = saidaTestes
+  .split(/\r?\n/)
+  .filter((l) => l.includes('✓') && l.includes(' > '))
+  .map((l) => '✓ ' + l.replace(/^.*?tests\/core\.test\.ts > /, '').replace(/\s+\d+ms$/, '').replace(' > ', ' › ').replace(/\r/g, '\\r'));
+const resumo = saidaTestes.match(/Tests\s+\d+ passed \(\d+\)/)?.[0];
+if (!resumo || !testes.length) throw new Error('Os testes não passaram:\n' + saidaTestes);
+const linhasTestes = [...testes, '', resumo.replace(/\s+/, ' ')];
+const linhaDe = (txt) => linhasTestes.findIndex((l) => l.includes(txt)) + 1;
+
 export const CENAS = [
   {
     id: 'codigo-dados',
@@ -23,7 +34,7 @@ export const CENAS = [
         focos: [
           { de: 222, ate: 226, legenda: 'Embaralha os índices com semente e corta nos percentuais.', ms: 5200 },
           { de: 231, ate: 233, legenda: 'Treino, validação e teste nunca se misturam.', ms: 4200 },
-          { de: 234, ate: 235, legenda: 'A normalização das entradas é calculada só com o treino.', ms: 5200 },
+          { de: 234, ate: 235, legenda: 'A normalização é calculada só com o treino, para o teste não vazar no treino.', ms: 5600 },
           { de: 236, ate: 238, legenda: 'As saídas numéricas também: Min-Max para a faixa da ativação.', ms: 5600 },
         ],
       },
@@ -63,7 +74,7 @@ export const CENAS = [
           { de: 139, ate: 145, legenda: 'Para frente: a saída de cada camada vira a entrada da próxima.', ms: 5000 },
           { de: 156, ate: 159, legenda: 'Delta da saída: δ = (o − t)·f′(z).', ms: 4800 },
           { de: 160, ate: 168, legenda: 'Ocultas, de trás para frente: δ = f′(z)·Σ w·δ, com os pesos ainda antigos.', ms: 6200 },
-          { de: 171, ate: 174, legenda: 'Só depois de todos os deltas os pesos mudam.', ms: 4600 },
+          { de: 171, ate: 174, legenda: 'Só depois de todos os deltas os pesos mudam: a regra usa os pesos da ida.', ms: 5400 },
           { de: 177, ate: 182, legenda: 'Um passo de SGD: ida, volta e ajuste, para um exemplo.', ms: 4600 },
         ],
       },
@@ -79,7 +90,8 @@ export const CENAS = [
         focos: [
           { de: 88, ate: 90, legenda: 'A cada época, embaralha e treina um exemplo de cada vez.', ms: 5200 },
           { de: 92, ate: 95, legenda: 'No fim da época, mede o MSE do treino e da validação.', ms: 4800 },
-          { de: 96, ate: 102, legenda: 'Guarda os melhores pesos; sem melhorar por "paciência" épocas, para.', ms: 6200 },
+          { de: 96, ate: 102, legenda: 'Guarda os melhores pesos; sem melhorar por "paciência" épocas, para.', ms: 5600 },
+          { de: 96, ate: 102, legenda: 'Por quê: quando a validação piora, a rede começou a decorar o treino.', ms: 5200 },
         ],
       },
       {
@@ -106,6 +118,34 @@ export const CENAS = [
         focos: [
           { de: 55, ate: 63, legenda: 'O JSON guarda a arquitetura, os pesos e os vieses de cada camada.', ms: 5200 },
           { de: 68, ate: 69, legenda: 'E os parâmetros de normalização, para prever igual depois.', ms: 4800 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'codigo-testes',
+    eyebrow: 'Código · como sabemos que está certo',
+    titulo: 'Testes',
+    paginas: [
+      {
+        ...trecho('tests/core.test.ts', 81, 122),
+        focos: [
+          { de: 83, ate: 96, legenda: 'Uma rede com as quatro ativações e um exemplo qualquer.', ms: 4400 },
+          { de: 98, ate: 100, legenda: 'A retropropagação dá o gradiente de cada peso: δ·x.', ms: 4600 },
+          { de: 104, ate: 110, legenda: 'Mexe o peso um pouquinho para cada lado e mede o erro: a derivada numérica.', ms: 5800 },
+          { de: 111, ate: 111, legenda: 'As duas batem até a 5ª casa, em todos os pesos e vieses.', ms: 5200 },
+        ],
+      },
+      {
+        arquivo: 'npm test',
+        rotulo: `npm test · ${testes.length} testes`,
+        de: 1,
+        ate: linhasTestes.length,
+        linhas: linhasTestes,
+        focos: [
+          { de: linhaDe('gradientes analíticos'), ate: linhaDe('calcula todos os deltas'), legenda: 'Os gradientes e a ordem dos deltas.', ms: 4200 },
+          { de: linhaDe('só com o treino'), ate: linhaDe('z-score'), legenda: 'A divisão e a normalização só com o treino.', ms: 4000 },
+          { de: linhasTestes.length, ate: linhasTestes.length, legenda: 'Todos passam.', ms: 3600 },
         ],
       },
     ],
