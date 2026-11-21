@@ -149,7 +149,7 @@ const CAPITULOS = ['Dados', 'Arquitetura', 'Um exemplo', 'Treinando', 'Resultado
 const cartao = (re) => `return [...document.querySelectorAll('main .card, main section, main .panel')].filter((c) => ${re}.test(c.textContent) && c.getBoundingClientRect().height > 40).sort((a, b) => a.textContent.length - b.textContent.length)[0]`;
 // tempos da fala (s, contados do começo do áudio, que entra 0,5 s depois da cena)
 const NOME1 = process.env.NOME1 ?? 'Henrique Luan Fritz';
-const NOME2 = process.env.NOME2 ?? 'Lucas Pannenbecker Sckenal';
+const NOME2 = process.env.NOME2 ?? 'Lucas Pannebecker Sckenal';
 
 
 async function scrollToEl(fn) {
