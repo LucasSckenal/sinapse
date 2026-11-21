@@ -25,7 +25,7 @@
 
 Nada de TensorFlow, PyTorch ou diferenciação automática. Neurônio, camada, propagação, erro, retropropagação e SGD são código nosso, e o app mostra cada conta acontecendo.
 
-| | |
+| Etapa | O que dá para fazer |
 |---|---|
 | **Monte** | Qualquer número de camadas, neurônios e ativações, pela tela. Até blocos em paralelo. |
 | **Treine** | SGD com validação, parada antecipada e a rede em 3D acendendo a cada exemplo. |
@@ -57,7 +57,7 @@ flowchart LR
 
 179 linhas de lavoura: sementes por m² e nitrogênio → produtividade em kg/ha. Rede 2 → 4 Tanh → 1 Linear.
 
-| | |
+| Medida | Resultado |
 |---|---|
 | Parada antecipada | época 409, de volta aos pesos da 359 |
 | MSE do teste | **≈ 14.500** (kg/ha)² |
