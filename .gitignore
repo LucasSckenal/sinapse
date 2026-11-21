@@ -1,2 +1,6 @@
 node_modules
 dist
+
+# configuração do assistente (fica só no computador)
+.claude/
+.lucas.json
